@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campus Room &amp; Lab Availability Viewer | LPU CSE326 Team SOUL</title>
+  <meta name="description" content="Campus Room and Lab Availability Viewer for Lovely Professional University. Real-time slot status, timetable lookup, free room search, and booking management.">
+  
+  <!-- Core Stylesheets (Loaded in order) -->
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <!-- Accessible Skip Link -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Simulated Time Alert Banner (Controlled by UI.js) -->
+  <aside id="sim-banner" class="sim-banner hidden" role="status" aria-live="polite">
+    <div class="sim-banner-content">
+      <span class="sim-banner-icon" aria-hidden="true">&#9200;</span>
+      <span id="sim-banner-text">Simulated campus time is active.</span>
+      <button id="sim-banner-clear-btn" class="btn btn-sm btn-subtle" type="button">Reset to Real Time</button>
+    </div>
+  </aside>
+
+  <!-- Sticky Application Header -->
+  <header class="site-header" role="banner">
+    <div class="header-container">
+      <div class="header-left">
+        <a href="#/dashboard" class="header-brand" aria-label="Campus Room & Lab Viewer Home">
+          <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 21h18M3 7v14M21 7v14M6 21V11h4v10M14 21V11h4v10M9 3l3-2 3 2"></path>
+          </svg>
+          <div class="brand-text">
+            <span class="brand-title">RoomFinder LPU</span>
+            <span class="brand-subtitle">CSE326 &bull; Team SOUL</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="header-center">
+        <!-- Live Campus Clock -->
+        <div id="header-clock" class="header-clock" aria-label="Campus Time Clock" title="Current Campus Time">
+          <span class="clock-icon" aria-hidden="true">&#128337;</span>
+          <span id="clock-date" class="clock-date">-- --- ----</span>
+          <span id="clock-time" class="clock-time">--:--:--</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Role Switcher -->
+        <div class="role-switcher">
+          <label for="role-select" class="role-label">Role:</label>
+          <select id="role-select" class="role-select" aria-label="Active User Persona">
+            <option value="Student">Student</option>
+            <option value="Faculty">Faculty</option>
+            <option value="Admin">Admin (Coordinator)</option>
+          </select>
+        </div>
+
+        <!-- Theme Toggle -->
+        <button id="theme-toggle-btn" class="btn btn-icon theme-toggle" type="button" aria-label="Toggle dark/light theme" title="Toggle Theme">
+          <span id="theme-icon" aria-hidden="true">&#9681;</span>
+        </button>
+
+        <!-- Mobile Navigation Menu Toggle -->
+        <button id="nav-toggle-btn" class="nav-toggle-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation menu">
+          <span class="nav-icon" aria-hidden="true">&#9776;</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Navigation Bar -->
+    <nav id="site-nav" class="site-nav" aria-label="Main Navigation">
+      <ul class="nav-list" role="menubar">
+        <li class="nav-item" role="none">
+          <a href="#/dashboard" class="nav-link" role="menuitem" data-route="dashboard">
+            <span class="nav-icon" aria-hidden="true">&#128202;</span> Dashboard
+          </a>
+        </li>
+        <li class="nav-item" role="none">
+          <a href="#/availability" class="nav-link" role="menuitem" data-route="availability">
+            <span class="nav-icon" aria-hidden="true">&#128197;</span> Availability
+          </a>
+        </li>
+        <li class="nav-item" role="none">
+          <a href="#/find" class="nav-link" role="menuitem" data-route="find">
+            <span class="nav-icon" aria-hidden="true">&#128269;</span> Find a Room
+          </a>
+        </li>
+        <li class="nav-item" role="none">
+          <a href="#/request" class="nav-link" role="menuitem" data-route="request">
+            <span class="nav-icon" aria-hidden="true">&#9997;</span> Request a Room
+          </a>
+        </li>
+        <li class="nav-item" role="none">
+          <a href="#/requests" class="nav-link" role="menuitem" data-route="requests">
+            <span class="nav-icon" aria-hidden="true">&#128221;</span>
+            <span id="nav-requests-text">My Requests</span>
+          </a>
+        </li>
+        <li id="nav-admin-item" class="nav-item nav-admin hidden" role="none">
+          <a href="#/admin" class="nav-link" role="menuitem" data-route="admin">
+            <span class="nav-icon" aria-hidden="true">&#9881;</span> Admin Panel
+          </a>
+        </li>
+        <li class="nav-item" role="none">
+          <a href="#/help" class="nav-link" role="menuitem" data-route="help">
+            <span class="nav-icon" aria-hidden="true">&#10067;</span> Help &amp; Info
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </header>
+
+  <!-- Main View Container (Dynamic views injected here) -->
+  <main id="main-content" class="main-content" tabindex="-1">
+    <!-- View 1: Dashboard -->
+    <section id="view-dashboard" class="view-section" aria-labelledby="heading-dashboard" hidden>
+      <div class="view-header">
+        <h1 id="heading-dashboard" class="view-title">Campus Availability Dashboard</h1>
+        <p class="view-description">Real-time status, key occupancy indicators, and quick booking access.</p>
+      </div>
+      <div id="dashboard-content" class="dashboard-content"></div>
+    </section>
+
+    <!-- View 2: Availability Explorer -->
+    <section id="view-availability" class="view-section" aria-labelledby="heading-availability" hidden>
+      <div class="view-header">
+        <h1 id="heading-availability" class="view-title">Availability Explorer</h1>
+        <p class="view-description">Browse 9-slot daily timetables by building, room type, and occupancy status.</p>
+      </div>
+      <div id="availability-content" class="availability-content"></div>
+    </section>
+
+    <!-- View 3: Find a Free Room -->
+    <section id="view-find" class="view-section" aria-labelledby="heading-find" hidden>
+      <div class="view-header">
+        <h1 id="heading-find" class="view-title">Find a Free Room</h1>
+        <p class="view-description">Specify date, slot range, attendees, and amenities to find the best matching room.</p>
+      </div>
+      <div id="find-content" class="find-content"></div>
+    </section>
+
+    <!-- View 4: Request a Room -->
+    <section id="view-request" class="view-section" aria-labelledby="heading-request" hidden>
+      <div class="view-header">
+        <h1 id="heading-request" class="view-title">Submit Booking Request</h1>
+        <p class="view-description">Reserve academic classrooms and computer labs with instant conflict checking.</p>
+      </div>
+      <div id="request-content" class="request-content"></div>
+    </section>
+
+    <!-- View 5: Requests Tracker -->
+    <section id="view-requests" class="view-section" aria-labelledby="heading-requests" hidden>
+      <div class="view-header">
+        <h1 id="heading-requests" class="view-title">Booking Requests</h1>
+        <p class="view-description">Track approval status, review history, or manage submitted requests.</p>
+      </div>
+      <div id="requests-content" class="requests-content"></div>
+    </section>
+
+    <!-- View 6: Admin Panel -->
+    <section id="view-admin" class="view-section" aria-labelledby="heading-admin" hidden>
+      <div class="view-header">
+        <h1 id="heading-admin" class="view-title">Admin Management Portal</h1>
+        <p class="view-description">Manage rooms, buildings, weekly timetables, system data, and simulation clock.</p>
+      </div>
+      <div id="admin-content" class="admin-content"></div>
+    </section>
+
+    <!-- View 7: Help & Documentation -->
+    <section id="view-help" class="view-section" aria-labelledby="heading-help" hidden>
+      <div class="view-header">
+        <h1 id="heading-help" class="view-title">Help &amp; Project Documentation</h1>
+        <p class="view-description">Rules reference, viva demonstration checklist, and architecture details.</p>
+      </div>
+      <div id="help-content" class="help-content"></div>
+    </section>
+  </main>
+
+  <!-- Global Application Footer -->
+  <footer class="site-footer" role="contentinfo">
+    <div class="footer-container">
+      <div class="footer-meta">
+        <p class="footer-institution">
+          <strong>Lovely Professional University (LPU)</strong> &bull; Course CSE326 (Web Technology) &bull; CA1 Project
+        </p>
+        <p class="footer-credits">
+          Developed by <strong>Team SOUL</strong>: Angel Seth, Kartik, Dhruv Anand (First-Year B.Tech CSE)
+        </p>
+      </div>
+      <div class="footer-links">
+        <a href="#/help" class="footer-link">How to Use</a>
+        <span class="footer-divider">&bull;</span>
+        <a href="#/availability" class="footer-link">Live Grid</a>
+        <span class="footer-divider">&bull;</span>
+        <button id="footer-reset-btn" class="footer-link-btn" type="button">Reset Sample Data</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Reusable Accessible Modal Dialog -->
+  <dialog id="app-modal" class="modal-dialog" aria-labelledby="modal-title" aria-modal="true">
+    <div class="modal-content">
+      <header class="modal-header">
+        <h2 id="modal-title" class="modal-title">Dialog Title</h2>
+        <button id="modal-close-btn" class="btn-close" type="button" aria-label="Close dialog">&times;</button>
+      </header>
+      <div id="modal-body" class="modal-body">
+        <!-- Dynamic content injected here -->
+      </div>
+      <footer id="modal-footer" class="modal-footer">
+        <button id="modal-cancel-btn" class="btn btn-secondary" type="button">Close</button>
+        <button id="modal-confirm-btn" class="btn btn-primary" type="button">Confirm</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Core JavaScript Modules (Strict Load Order) -->
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/seed.js"></script>
+  <script src="js/validators.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/rooms.js"></script>
+  <script src="js/availability.js"></script>
+  <script src="js/bookings.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
