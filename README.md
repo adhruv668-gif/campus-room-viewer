@@ -7,6 +7,7 @@
 > 2. **Kartik** (Reg. No: 12401232) — Core Conflict Detection Algorithm, Slot Status Precedence & Form Validation Engine  
 > 3. **Dhruv Anand** (Reg. No: 12401233) — Client-Side Hash Router, LocalStorage Persistence Layer & Admin Management Tools  
 > 
+> **Live Custom URL (Vercel):** [https://campus-room-viewer.vercel.app/](https://campus-room-viewer.vercel.app/)  
 > **Live Deployment (GitHub Pages):** [https://adhruv668-gif.github.io/campus-room-viewer/](https://adhruv668-gif.github.io/campus-room-viewer/)  
 > **Source Repository:** [https://github.com/adhruv668-gif/campus-room-viewer](https://github.com/adhruv668-gif/campus-room-viewer)  
 
