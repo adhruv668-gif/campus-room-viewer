@@ -3,7 +3,7 @@
  * 
  * Purpose: Core availability calculation engine, timetable grid renderer,
  *          card view toggle, slot inspector modal, and free room finder.
- * Owner: Member B (Angel Seth - Availability Engine & Explorer)
+ * Owner: Kartik (Reg. No. 12612598) - Slot Conflict Algorithm & Availability Explorer
  * Depends on: Config (js/config.js), Utils (js/utils.js), Store (js/store.js),
  *             Rooms (js/rooms.js), UI (js/ui.js)
  * 

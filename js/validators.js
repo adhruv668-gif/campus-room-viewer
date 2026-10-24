@@ -3,7 +3,7 @@
  * 
  * Purpose: Pure validation functions for form inputs, request constraints,
  *          admin data fields, role limits, and reject remarks.
- * Owner: Member C (Dhruv Anand - Form Validation & Workflows)
+ * Owner: Kartik (Reg. No. 12612598) - Pure Form Validation Engine
  * Depends on: Config (js/config.js), Utils (js/utils.js)
  * 
  * Functions:

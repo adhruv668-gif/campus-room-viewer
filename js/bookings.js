@@ -3,7 +3,7 @@
  * 
  * Purpose: Booking lifecycle management, structured reservation forms,
  *          conflict re-checks, auto-rejection cascades, and request tracking.
- * Owner: Member C (Dhruv Anand - Form Validation, Workflows & Tracker)
+ * Owner: Dhruv Anand (Reg. No. 12619773) - Booking Workflows, Approval Cascades & Tracking
  * Depends on: Config (js/config.js), Utils (js/utils.js), Store (js/store.js),
  *             Validators (js/validators.js), Rooms (js/rooms.js),
  *             Availability (js/availability.js), UI (js/ui.js)
@@ -113,11 +113,33 @@ const Bookings = {
 
     // 1. Calculate active upcoming booking count for this requester
     const allBookings = this.getAll();
-    const todayStr = Utils.getLocalDateString(Utils.getNow());
+    const now = Utils.getNow();
+    const todayStr = Utils.getLocalDateString(now);
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const self = this;
+
     const activeCount = allBookings.filter(function(b) {
-      return b.requesterId.trim().toUpperCase() === formData.requesterId.trim().toUpperCase() &&
-             b.date >= todayStr &&
-             (b.status === Config.BOOKING_STATUS.PENDING || b.status === Config.BOOKING_STATUS.APPROVED);
+      if (b.requesterId.trim().toUpperCase() !== formData.requesterId.trim().toUpperCase()) {
+        return false;
+      }
+      if (b.date < todayStr) {
+        return false;
+      }
+      const computed = self.getComputedStatus(b);
+      if (computed !== Config.BOOKING_STATUS.PENDING && computed !== Config.BOOKING_STATUS.APPROVED) {
+        return false;
+      }
+      // If booking is today, check if its endSlot has already ended
+      if (b.date === todayStr) {
+        const slotDef = Config.SLOTS.find(function(s) { return s.id === b.endSlot; });
+        if (slotDef) {
+          const slotEndMinutes = slotDef.endHour * 60 + slotDef.endMin;
+          if (nowMinutes >= slotEndMinutes) {
+            return false;
+          }
+        }
+      }
+      return true;
     }).length;
 
     // 2. Validate input fields
@@ -172,7 +194,10 @@ const Bookings = {
       ]
     };
 
-    Store.addItem('BOOKINGS', newBooking);
+    const saved = Store.addItem('BOOKINGS', newBooking);
+    if (!saved) {
+      return { success: false, errors: { form: 'Storage write failed. Request could not be saved.' } };
+    }
 
     // 5. Remember requester details in settings
     const settings = Store.get('SETTINGS') || {};
@@ -238,7 +263,10 @@ const Bookings = {
       note: 'Edited request details.'
     });
 
-    Store.updateItem('BOOKINGS', id, booking);
+    const saved = Store.updateItem('BOOKINGS', id, booking);
+    if (!saved) {
+      return { success: false, errors: { form: 'Storage write failed. Booking could not be updated.' } };
+    }
     return { success: true };
   },
 
@@ -275,7 +303,10 @@ const Bookings = {
       by: 'Admin',
       note: 'Request approved by Room Coordinator.'
     });
-    Store.updateItem('BOOKINGS', id, booking);
+    const saved = Store.updateItem('BOOKINGS', id, booking);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Booking could not be approved.', rejectedConflicts: [] };
+    }
 
     // Step 3: Auto-reject competing Pending requests
     const competingPending = conflicts.filter(function(c) { return c.type === 'pending'; });
@@ -328,7 +359,10 @@ const Bookings = {
       note: adminRemark.trim()
     });
 
-    Store.updateItem('BOOKINGS', id, booking);
+    const saved = Store.updateItem('BOOKINGS', id, booking);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Booking could not be rejected.' };
+    }
     return { success: true, message: `Booking ${booking.ref} rejected.` };
   },
 
@@ -360,7 +394,10 @@ const Bookings = {
       note: cancelReason || 'Cancelled by user.'
     });
 
-    Store.updateItem('BOOKINGS', id, booking);
+    const saved = Store.updateItem('BOOKINGS', id, booking);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Booking could not be cancelled.' };
+    }
     return { success: true, message: `Booking ${booking.ref} cancelled.` };
   },
 
@@ -649,7 +686,7 @@ const Bookings = {
         const b = self.getById(id);
         if (!b) return;
 
-        UI.showModal('Confirm Booking Approval', `<p>Approve request <strong>${b.ref}</strong> for ${b.requesterName}?</p><p class="form-hint">Any competing requests for this slot will be automatically rejected.</p>`, function() {
+        UI.showModal('Confirm Booking Approval', `<p>Approve request <strong>${Utils.escapeHTML(b.ref)}</strong> for ${Utils.escapeHTML(b.requesterName)}?</p><p class="form-hint">Any competing requests for this slot will be automatically rejected.</p>`, function() {
           const res = self.approveBooking(id);
           UI.closeModal();
           UI.showToast(res.message, res.success ? 'success' : 'error');
@@ -692,7 +729,7 @@ const Bookings = {
         const b = self.getById(id);
         if (!b) return;
 
-        UI.showModal('Cancel Booking Request', `<p>Are you sure you want to cancel request <strong>${b.ref}</strong>?</p>`, function() {
+        UI.showModal('Cancel Booking Request', `<p>Are you sure you want to cancel request <strong>${Utils.escapeHTML(b.ref)}</strong>?</p>`, function() {
           const res = self.cancelBooking(id, 'Cancelled by user.');
           UI.closeModal();
           UI.showToast(res.message, res.success ? 'success' : 'error');
@@ -772,14 +809,14 @@ const Bookings = {
     const bodyHtml = `
       ${trackerHtml}
       <div style="display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3);">
-        <p><strong>Reference:</strong> <code>${b.ref}</code></p>
+        <p><strong>Reference:</strong> <code>${Utils.escapeHTML(b.ref)}</code></p>
         <p><strong>Room:</strong> ${Utils.escapeHTML(roomName)}</p>
         <p><strong>Date &amp; Time:</strong> ${Utils.formatDate(b.date)} &bull; ${Utils.formatSlotTime(b.startSlot)} to ${Utils.formatSlotTime(b.endSlot)}</p>
-        <p><strong>Requester:</strong> ${Utils.escapeHTML(b.requesterName)} (${b.requesterType} &bull; ${b.requesterId})</p>
+        <p><strong>Requester:</strong> ${Utils.escapeHTML(b.requesterName)} (${b.requesterType} &bull; ${Utils.escapeHTML(b.requesterId)})</p>
         ${isAdmin ? `<p><strong>Contact:</strong> ${Utils.escapeHTML(b.email)} ${b.phone ? '&bull; ' + Utils.escapeHTML(b.phone) : ''}</p>` : ''}
         <p><strong>Attendees:</strong> ${b.attendees} persons</p>
         <p><strong>Purpose:</strong> ${Utils.escapeHTML(b.purpose)}</p>
-        ${b.requirements && b.requirements.length > 0 ? `<p><strong>Special Requirements:</strong> ${b.requirements.join(', ')}</p>` : ''}
+        ${b.requirements && b.requirements.length > 0 ? `<p><strong>Special Requirements:</strong> ${b.requirements.map(function(r) { return Utils.escapeHTML(r); }).join(', ')}</p>` : ''}
         ${b.adminNote ? `<div class="card" style="background-color: var(--bg-subtle); margin-top: var(--space-2);"><p style="margin: 0;"><strong>Coordinator Note:</strong> ${Utils.escapeHTML(b.adminNote)}</p></div>` : ''}
 
         <div style="margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2);">
@@ -1048,7 +1085,7 @@ const Bookings = {
       if (hard.length > 0) {
         liveBox.innerHTML = `<span style="color: var(--color-danger);">&#10060; <strong>Hard Conflict:</strong> ${Utils.escapeHTML(hard[0].reason)}</span>`;
       } else if (soft.length > 0) {
-        liveBox.innerHTML = `<span style="color: var(--color-requested);">&#9888;&#65039; <strong>Notice:</strong> 1 other pending request exists for this slot. Submission permitted; coordinator will decide.</span>`;
+        liveBox.innerHTML = `<span style="color: var(--color-requested);">&#9888;&#65039; <strong>Notice:</strong> ${soft.length} other pending request(s) exist for this slot. Submission permitted; coordinator will decide.</span>`;
       } else {
         liveBox.innerHTML = `<span style="color: var(--color-free);">&#9989; <strong>Free:</strong> Selected slots are completely available.</span>`;
       }
@@ -1144,7 +1181,7 @@ const Bookings = {
           firstInvalidInput.focus();
         }
 
-        UI.showToast('Please fix the errors in the form before submitting.', 'error');
+        UI.showToast((result.errors && result.errors.form) || 'Please fix the errors in the form before submitting.', 'error');
       }
     });
   }

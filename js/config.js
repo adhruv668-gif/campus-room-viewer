@@ -3,7 +3,7 @@
  * 
  * Purpose: Centralized system configuration, business rules, validation constraints,
  *          slot timing definitions, and local storage schema constants.
- * Owner: Member A (Kartik - Data Layer & Admin)
+ * Owner: Kartik (Reg. No. 12612598) - System Configuration & Data Contracts
  * Depends on: None (First script loaded in index.html)
  * 
  * Exports:

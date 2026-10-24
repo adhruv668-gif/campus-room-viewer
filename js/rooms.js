@@ -3,7 +3,7 @@
  * 
  * Purpose: Room and Building inventory management, Admin management panel tabs,
  *          weekly timetable maintenance, and facility administration.
- * Owner: Member A (Kartik - Data Layer & Admin)
+ * Owner: Dhruv Anand (Reg. No. 12619773) - Room & Timetable Management
  * Depends on: Config (js/config.js), Utils (js/utils.js), Store (js/store.js),
  *             Validators (js/validators.js), UI (js/ui.js)
  * 
@@ -82,7 +82,10 @@ const Rooms = {
       notes: (roomData.notes || '').trim()
     };
 
-    Store.addItem('ROOMS', newRoom);
+    const saved = Store.addItem('ROOMS', newRoom);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Room could not be saved.' };
+    }
     return { success: true, message: `Room ${newRoom.roomNo} successfully created.` };
   },
 
@@ -106,7 +109,10 @@ const Rooms = {
       return { success: false, message: firstError };
     }
 
-    Store.updateItem('ROOMS', id, merged);
+    const saved = Store.updateItem('ROOMS', id, merged);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Room could not be updated.' };
+    }
     return { success: true, message: `Room ${merged.roomNo} updated successfully.` };
   },
 
@@ -132,14 +138,18 @@ const Rooms = {
     // Remove associated timetable classes
     const timetable = Store.get('TIMETABLE') || [];
     const filteredTt = timetable.filter(function(t) { return t.roomId !== id; });
-    Store.set('TIMETABLE', filteredTt);
+    const ttSaved = Store.set('TIMETABLE', filteredTt);
+    const rmSaved = Store.removeItem('ROOMS', id);
+    if (!ttSaved || !rmSaved) {
+      return { success: false, message: 'Storage write failed. Room could not be deleted.' };
+    }
 
-    Store.removeItem('ROOMS', id);
     return { success: true, message: `Room ${room.roomNo} and its timetable entries have been removed.` };
   },
 
   /**
    * Toggles maintenance status. Auto-cancels future Pending and Approved bookings if set to Maintenance.
+   * Does NOT cancel bookings whose slot has already ended earlier today.
    * @param {string} roomId
    * @returns {{ success: boolean, message: string, affectedBookings: number }}
    */
@@ -154,12 +164,25 @@ const Rooms = {
     let affectedCount = 0;
 
     if (newStatus === Config.ROOM_STATUS.MAINTENANCE) {
-      const todayStr = Utils.getLocalDateString(Utils.getNow());
+      const now = Utils.getNow();
+      const todayStr = Utils.getLocalDateString(now);
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
       const bookings = Store.get('BOOKINGS') || [];
-      const nowIso = Utils.getNow().toISOString();
+      const nowIso = now.toISOString();
 
       bookings.forEach(function(b) {
         if (b.roomId === roomId && b.date >= todayStr && (b.status === Config.BOOKING_STATUS.PENDING || b.status === Config.BOOKING_STATUS.APPROVED)) {
+          // If the booking is today, do not cancel if its slot has already ended earlier today
+          if (b.date === todayStr) {
+            const slotDef = Config.SLOTS.find(function(s) { return s.id === b.endSlot; });
+            if (slotDef) {
+              const slotEndMinutes = slotDef.endHour * 60 + slotDef.endMin;
+              if (nowMinutes >= slotEndMinutes) {
+                return; // Slot has already ended; preserve historical booking
+              }
+            }
+          }
+
           b.status = Config.BOOKING_STATUS.CANCELLED;
           b.adminNote = 'System cancellation: Room marked under maintenance.';
           b.updatedAt = nowIso;
@@ -174,12 +197,26 @@ const Rooms = {
       });
 
       if (affectedCount > 0) {
-        Store.set('BOOKINGS', bookings);
+        const bSaved = Store.set('BOOKINGS', bookings);
+        if (!bSaved) {
+          return {
+            success: false,
+            message: 'Storage write failed. Could not cancel affected bookings.',
+            affectedBookings: 0
+          };
+        }
       }
     }
 
     room.status = newStatus;
-    Store.updateItem('ROOMS', roomId, room);
+    const rSaved = Store.updateItem('ROOMS', roomId, room);
+    if (!rSaved) {
+      return {
+        success: false,
+        message: 'Storage write failed. Could not update room status.',
+        affectedBookings: 0
+      };
+    }
 
     return {
       success: true,
@@ -226,7 +263,10 @@ const Rooms = {
       floors: parseInt(bldgData.floors, 10)
     };
 
-    Store.addItem('BUILDINGS', newBldg);
+    const saved = Store.addItem('BUILDINGS', newBldg);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Building could not be saved.' };
+    }
     return { success: true, message: `Building ${newBldg.code} created.` };
   },
 
@@ -248,7 +288,10 @@ const Rooms = {
       return { success: false, message: firstError };
     }
 
-    Store.updateItem('BUILDINGS', id, merged);
+    const saved = Store.updateItem('BUILDINGS', id, merged);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Building could not be updated.' };
+    }
     return { success: true, message: `Building ${merged.code} updated.` };
   },
 
@@ -269,7 +312,10 @@ const Rooms = {
       };
     }
 
-    Store.removeItem('BUILDINGS', id);
+    const saved = Store.removeItem('BUILDINGS', id);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Building could not be deleted.' };
+    }
     return { success: true, message: `Building ${bldg.code} deleted.` };
   },
 
@@ -420,7 +466,7 @@ const Rooms = {
 
         if (room.status === Config.ROOM_STATUS.ACTIVE) {
           // Confirm placing under maintenance
-          UI.showModal('Confirm Room Maintenance', `<p>Place <strong>Room ${room.roomNo}</strong> under Maintenance?</p><p class="form-hint">Any upcoming approved or pending booking requests will be automatically cancelled.</p>`, function() {
+          UI.showModal('Confirm Room Maintenance', `<p>Place <strong>Room ${Utils.escapeHTML(room.roomNo)}</strong> (${Utils.escapeHTML(room.name)}) under Maintenance?</p><p class="form-hint">Any upcoming approved or pending booking requests will be automatically cancelled.</p>`, function() {
             const res = self.toggleMaintenance(id);
             UI.closeModal();
             UI.showToast(res.message, res.success ? 'success' : 'error');
@@ -440,7 +486,7 @@ const Rooms = {
         const room = self.getById(id);
         if (!room) return;
 
-        UI.showModal('Confirm Room Deletion', `<p>Are you sure you want to permanently delete <strong>Room ${room.roomNo}</strong>? This action cannot be undone.</p>`, function() {
+        UI.showModal('Confirm Room Deletion', `<p>Are you sure you want to permanently delete <strong>Room ${Utils.escapeHTML(room.roomNo)}</strong> (${Utils.escapeHTML(room.name)})? This action cannot be undone.</p>`, function() {
           const res = self.deleteRoom(id);
           UI.closeModal();
           UI.showToast(res.message, res.success ? 'success' : 'error');
@@ -651,7 +697,7 @@ const Rooms = {
         const b = self.getBuildingById(id);
         if (!b) return;
 
-        UI.showModal('Confirm Building Deletion', `<p>Delete building <strong>${b.name} (${b.code})</strong>?</p>`, function() {
+        UI.showModal('Confirm Building Deletion', `<p>Delete building <strong>${Utils.escapeHTML(b.name)} (${Utils.escapeHTML(b.code)})</strong>?</p>`, function() {
           const res = self.deleteBuilding(id);
           UI.closeModal();
           UI.showToast(res.message, res.success ? 'success' : 'error');
@@ -816,10 +862,14 @@ const Rooms = {
         UI.showModal('Confirm Class Removal', '<p>Remove this recurring class entry from the weekly timetable?</p>', function() {
           const ttList = Store.get('TIMETABLE') || [];
           const updated = ttList.filter(function(t) { return t.id !== id; });
-          Store.set('TIMETABLE', updated);
+          const saved = Store.set('TIMETABLE', updated);
           UI.closeModal();
-          UI.showToast('Class entry removed.', 'success');
-          Rooms._renderTimetableAdmin(containerEl);
+          if (saved) {
+            UI.showToast('Class entry removed.', 'success');
+            Rooms._renderTimetableAdmin(containerEl);
+          } else {
+            UI.showToast('Storage write failed. Class could not be removed.', 'error');
+          }
         }, 'Remove Class', true);
       }
     });
@@ -921,10 +971,14 @@ const Rooms = {
             section: section
           };
 
-          Store.addItem('TIMETABLE', newEntry);
+          const saved = Store.addItem('TIMETABLE', newEntry);
           UI.closeModal();
-          UI.showToast('Class scheduled successfully.', 'success');
-          Rooms._renderTimetableAdmin(containerEl);
+          if (saved) {
+            UI.showToast('Class scheduled successfully.', 'success');
+            Rooms._renderTimetableAdmin(containerEl);
+          } else {
+            UI.showToast('Storage write failed. Class could not be scheduled.', 'error');
+          }
         }, 'Schedule Class');
       });
     }

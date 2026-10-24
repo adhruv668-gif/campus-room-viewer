@@ -3,7 +3,7 @@
  * 
  * Purpose: Campus real-time overview, KPI cards, visual CSS charts for
  *          occupancy and slot utilization, quick-reserve list, and activity feed.
- * Owner: Shared (Team SOUL - Angel Seth, Kartik, Dhruv Anand)
+ * Owner: Dhruv Anand (Reg. No. 12619773) - KPI Metrics & Pure CSS Occupancy Visuals
  * Depends on: Config, Utils, Store, Rooms, Availability, Bookings
  * 
  * Functions:

@@ -3,7 +3,7 @@
  * 
  * Purpose: Global UI controllers for toast notifications, accessible dialog modals,
  *          theme switching, live campus clock, and role-based navbar states.
- * Owner: Shared (Team SOUL)
+ * Owner: Angel Seth (Reg. No. 12611041) - Accessible UI Controls, Theme & Clock
  * Depends on: Config (js/config.js), Utils (js/utils.js), Store (js/store.js)
  * 
  * Functions:

@@ -15,16 +15,16 @@
 
 ## 2. Project Overview & Key Features
 
-A lightweight, responsive single-page web application designed for academic campus room scheduling. It displays real-time room availability across academic blocks, tracks a 9-slot daily schedule, and provides conflict-free booking requests.
+A lightweight, responsive single-page web application designed for academic campus room scheduling. It visualizes room availability across academic blocks using local demonstration sample data, tracks a 9-slot daily schedule, and enforces strict conflict prevention for scheduled classes and approved reservations while managing competing pending requests through administrative review.
 
 ### Key Features
-- **Real-Time Dashboard**: Summary KPI metrics, pure CSS building occupancy and slot load charts, and quick-reserve links for currently free rooms.
-- **Availability Explorer**: 9-slot daily schedule (09:00–18:00, Mon–Sat) across 28 campus rooms in 4 academic blocks (Block 32, 34, 38, Tech Center).
+- **Campus Dashboard**: Summary KPI metrics computed dynamically from local demo data, pure CSS building occupancy and slot load charts, and quick-reserve shortcuts for currently free rooms.
+- **Availability Explorer**: 9-slot daily timetable grid (09:00–18:00, Mon–Sat) across 28 campus rooms in 4 academic blocks (Block 32, 34, 38, Tech Center) evaluated client-side against local schedules.
 - **Room Finder**: Filters rooms by date, slot duration, minimum capacity, and facilities (Projector, AC, Wi-Fi, Smart Board).
-- **Booking Engine**: Enforces role limits (Student: max 2 consecutive slots, 3 active requests; Faculty: max 4 slots, 6 active requests) and validates 8-digit student registration numbers.
-- **Conflict Detection Engine**: Uses range overlap logic $(s1 \le e2) \land (s2 \le e1)$ to prevent collisions with scheduled lectures and approved bookings.
-- **Admin Management & Approval Cascades**: Approving a booking auto-rejects overlapping pending requests; maintenance mode auto-cancels affected reservations.
-- **Accessible Design**: Native HTML5 `<dialog>` modals, dark/light theme switcher, WCAG AA contrast (>= 4.5:1), and responsive layout down to 360px mobile viewports.
+- **Booking Engine**: Enforces role quotas (Student: max 2 consecutive slots, 3 active upcoming requests; Faculty: max 4 slots, 6 active requests) with 8-digit student ID and alphanumeric faculty ID validation.
+- **Conflict Detection & Pending Request Policy**: Uses range overlap logic $(s1 \le e2) \land (s2 \le e1)$ to strictly block submission against hard conflicts (scheduled lectures, maintenance windows, and approved bookings). Competing pending requests do not hard-block submission; they generate an advisory notice and enter coordinator review, where approving one request automatically cascades rejections to competing pending submissions.
+- **Admin Management & Cascades**: Approving a booking auto-rejects overlapping pending requests; toggling room maintenance auto-cancels affected upcoming reservations while preserving completed sessions.
+- **Accessible Design**: Native HTML5 `<dialog>` modals with sanitized content, dark/light theme switcher, WCAG AA contrast (>= 4.5:1), and responsive layout down to 360px mobile viewports.
 
 ---
 

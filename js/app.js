@@ -3,7 +3,7 @@
  * 
  * Purpose: Application bootstrapping, client hash router, role switcher,
  *          access control guards, and global event delegation.
- * Owner: Shared (Team SOUL)
+ * Owner: Dhruv Anand (Reg. No. 12619773) - Hash Router, Route Guards & Bootstrap
  * Depends on: All modules (Config, Utils, Store, Seed, Validators, UI,
  *             Rooms, Availability, Bookings, Dashboard)
  * 

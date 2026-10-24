@@ -3,7 +3,7 @@
  * 
  * Purpose: Pure utility helper functions for local date/time manipulation,
  *          string escaping, debouncing, reference generation, and file exports.
- * Owner: Shared (Team SOUL)
+ * Owner: Kartik (Reg. No. 12612598) - Timezone-Safe Date Math & Security Helpers
  * Depends on: Config (js/config.js)
  * 
  * Functions:

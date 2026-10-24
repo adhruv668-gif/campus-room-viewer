@@ -3,7 +3,7 @@
  * 
  * Purpose: Deterministic sample data generator populating 4 buildings, 28 rooms,
  *          weekly academic timetables, and 16 relative booking requests.
- * Owner: Member A (Kartik - Data Layer & Admin)
+ * Owner: Dhruv Anand (Reg. No. 12619773) - Deterministic Sample Data Generator
  * Depends on: Config (js/config.js), Utils (js/utils.js)
  * 
  * Functions:

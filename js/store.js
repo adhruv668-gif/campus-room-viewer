@@ -3,7 +3,7 @@
  * 
  * Purpose: LocalStorage persistence layer with schema versioning, fail-safe try/catch,
  *          in-memory fallback, and full JSON backup/restore capabilities.
- * Owner: Member A (Kartik - Data Layer & Admin)
+ * Owner: Dhruv Anand (Reg. No. 12619773) - LocalStorage Persistence Layer & Schema Versioning
  * Depends on: Config (js/config.js), Seed (js/seed.js)
  * 
  * Functions:
@@ -87,18 +87,24 @@ const Store = {
           return parsed;
         }
       } catch (e) {
-        // Fall back to memory cache if JSON parse fails or storage read error
+        // Switch storage availability to false if read fails
+        this._isStorageAvailable = false;
       }
     }
 
-    return this._memoryCache[storageKey] || (keyName === 'SETTINGS' ? {} : []);
+    if (this._memoryCache[storageKey] !== undefined) {
+      return this._memoryCache[storageKey];
+    }
+    return (keyName === 'SETTINGS' ? {} : []);
   },
 
   /**
    * Persists collection into localStorage and memory cache.
+   * If localStorage write throws, updates memory cache, marks storage as unavailable,
+   * and returns false so callers know persistent storage failed.
    * @param {string} keyName - Collection identifier
    * @param {Array|Object} data - Value to persist
-   * @returns {boolean}
+   * @returns {boolean} - True if persisted to localStorage, false if write failed.
    */
   set: function(keyName, data) {
     const storageKey = this._resolveKey(keyName);
@@ -109,10 +115,14 @@ const Store = {
         localStorage.setItem(storageKey, JSON.stringify(data));
         return true;
       } catch (err) {
+        // localStorage write threw (e.g. QuotaExceededError or storage blocked).
+        // Switch storage availability to false so subsequent get() calls read from
+        // the in-memory fallback cache rather than stale data from localStorage.
+        this._isStorageAvailable = false;
         return false;
       }
     }
-    return true;
+    return false;
   },
 
   /**
