@@ -21,6 +21,12 @@
 const App = {
   _activeRoute: 'dashboard',
   _clockInterval: null,
+  state: {
+    filters: {
+      grid: {},
+      finder: {}
+    }
+  },
 
   /**
    * Main bootstrap entry point called when DOM is ready.
@@ -29,18 +35,21 @@ const App = {
     // 1. Initialize persistent storage layer
     Store.init();
 
-    // 2. Initialize and apply user theme
+    // 2. Initialize accessible dialog modal controller
+    UI.initModal();
+
+    // 3. Initialize and apply user theme
     const settings = Store.get('SETTINGS') || {};
     UI.applyTheme(settings.theme || 'system');
 
-    // 3. Initialize header clock & interval
+    // 4. Initialize header clock & interval
     UI.updateClock();
     if (this._clockInterval) clearInterval(this._clockInterval);
     this._clockInterval = setInterval(function() {
       UI.updateClock();
     }, 1000);
 
-    // 4. Initialize Role Switcher
+    // 5. Initialize Role Switcher
     const roleSelect = document.getElementById('role-select');
     if (roleSelect) {
       roleSelect.value = settings.role || Config.ROLES.STUDENT;
@@ -53,8 +62,11 @@ const App = {
           const pinModalHtml = `
             <div class="form-group">
               <label for="admin-pin-input" class="form-label">Enter 4-Digit Coordinator PIN:</label>
-              <input type="password" id="admin-pin-input" class="form-input" maxlength="4" placeholder="1234" autocomplete="off" />
-              <p class="form-hint">Default demo PIN: <strong>1234</strong> (Runs client-side for demonstration).</p>
+              <input type="password" id="admin-pin-input" class="form-input" maxlength="4" placeholder="Enter 4-digit PIN (Demo: 1234)" autocomplete="off" />
+              <div style="margin-top: var(--space-2); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <p class="form-hint" style="margin: 0;">Default demo PIN: <strong>1234</strong> (Runs client-side for demonstration).</p>
+                <button type="button" id="quick-fill-pin-btn" class="btn btn-secondary btn-sm" style="font-size: var(--text-xs); padding: 4px 8px;">Fill Demo PIN (1234)</button>
+              </div>
             </div>
           `;
 
@@ -66,13 +78,24 @@ const App = {
               roleSelect.value = currentRole;
             }
           }, 'Unlock Admin Access');
+
+          const quickFillBtn = document.getElementById('quick-fill-pin-btn');
+          if (quickFillBtn) {
+            quickFillBtn.addEventListener('click', function() {
+              const input = document.getElementById('admin-pin-input');
+              if (input) {
+                input.value = '1234';
+                input.focus();
+              }
+            });
+          }
         } else {
           App.setRole(targetRole);
         }
       });
     }
 
-    // 5. Theme Toggle Button
+    // 6. Theme Toggle Button
     const themeBtn = document.getElementById('theme-toggle-btn');
     if (themeBtn) {
       themeBtn.addEventListener('click', function() {
@@ -382,10 +405,12 @@ const App = {
 };
 
 // Bootstrap application when document DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() {
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      App.init();
+    });
+  } else if (typeof window !== 'undefined' && typeof window.addEventListener === 'function' && document.getElementById('main-content')) {
     App.init();
-  });
-} else {
-  App.init();
+  }
 }

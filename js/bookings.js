@@ -226,7 +226,7 @@ const Bookings = {
       return { success: false, errors: { form: 'Storage write failed. Request could not be saved.' } };
     }
 
-    return { success: true, ref: ref };
+    return { success: true, ref: ref, booking: newBooking };
   },
 
   /**

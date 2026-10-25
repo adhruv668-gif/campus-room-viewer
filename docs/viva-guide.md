@@ -152,8 +152,8 @@ getSlotStatus: function(roomId, dateStr, slotNumber) {
 27. **Why does `Validators.validateRejectRemark()` enforce a minimum length of 5 characters?**  
     When an admin rejects a booking, the applicant receives the rejection remark. Enforcing a 5-to-200 character requirement prevents administrators from submitting blank or single-character dismissal notes (e.g. "." or "x") without a valid reason.
 
-28. **What happens if a user attempts to book a slot that has already ended earlier today?**  
-    In `Validators.validateSlots()`, if `dateStr === todayStr`, the function looks up the slot's closing time (`endHour * 60 + endMin`). If the current time in minutes exceeds the slot's end time, validation fails with an explicit error: `"Slot X has already ended today. Select a future slot."`
+28. **What happens if a user attempts to book a slot that has already started or passed today?**  
+    In `Validators.validateSlots()`, if `dateStr === todayStr`, the function looks up the slot's start time (`startHour * 60 + startMin`). If the current time in minutes reaches or exceeds the slot's start time (`nowMinutes >= slotStartMinutes`), validation fails with an explicit error: `"Slot X (HH:MM - HH:MM) has already started or passed today. Select an upcoming slot."` This prevents users from booking an ongoing lecture or lab slot that is already in progress.
 
 29. **How are booking reference codes generated and structured?**  
     In `Utils.generateRef(dateString)`, references follow the pattern `RB-YYYYMMDD-NNN`, where `YYYYMMDD` is the sanitized date string (digits only) and `NNN` is a 3-digit random integer between 100 and 999 (e.g. `RB-20261024-482`). This creates consistent, human-readable reference tokens.

@@ -22,6 +22,37 @@
 
 const UI = {
   _activeModalTrigger: null,
+  _modalInitialized: false,
+
+  /**
+   * Registers persistent event listeners on the modal dialog once.
+   * Handles backdrop clicks, Escape/cancel, and header close button.
+   */
+  initModal: function() {
+    const dialog = document.getElementById('app-modal');
+    if (!dialog || this._modalInitialized) return;
+    this._modalInitialized = true;
+
+    // Dismiss when clicking directly on dialog backdrop
+    dialog.addEventListener('click', function(e) {
+      if (e.target === dialog) {
+        UI.closeModal();
+      }
+    });
+
+    // Handle native Esc key cancel event safely
+    dialog.addEventListener('cancel', function(e) {
+      e.preventDefault();
+      UI.closeModal();
+    });
+
+    const closeBtn = document.getElementById('modal-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        UI.closeModal();
+      });
+    }
+  },
 
   /**
    * Displays an accessible toast notification that automatically dismisses.
@@ -125,12 +156,7 @@ const UI = {
       footerEl.appendChild(confirmBtn);
     }
 
-    const closeBtn = document.getElementById('modal-close-btn');
-    if (closeBtn) {
-      closeBtn.onclick = function() {
-        UI.closeModal();
-      };
-    }
+    this.initModal();
 
     if (typeof dialog.showModal === 'function') {
       dialog.showModal();

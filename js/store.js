@@ -251,31 +251,53 @@ const Store = {
     }
 
     const invalidBldg = data.buildings.some(function(b) {
-      return !b || typeof b !== 'object' || !b.id || !b.code || !b.name;
+      return !b || typeof b !== 'object' ||
+             typeof b.id !== 'string' || !b.id.trim() ||
+             typeof b.code !== 'string' || !b.code.trim() ||
+             typeof b.name !== 'string' || !b.name.trim();
     });
     if (invalidBldg) {
-      return { success: false, message: 'Invalid backup schema: Corrupted building records.' };
+      return { success: false, message: 'Invalid backup schema: Corrupted building records (missing id, code, or name).' };
     }
 
     const invalidRoom = data.rooms.some(function(r) {
-      return !r || typeof r !== 'object' || !r.id || !r.buildingId || !r.roomNo || !r.name;
+      return !r || typeof r !== 'object' ||
+             typeof r.id !== 'string' || !r.id.trim() ||
+             typeof r.buildingId !== 'string' || !r.buildingId.trim() ||
+             typeof r.roomNo !== 'string' || !r.roomNo.trim() ||
+             typeof r.name !== 'string' || !r.name.trim() ||
+             typeof r.type !== 'string' || !r.type.trim() ||
+             typeof r.capacity !== 'number' || !Number.isFinite(r.capacity) || r.capacity <= 0 ||
+             typeof r.status !== 'string' || !r.status.trim();
     });
     if (invalidRoom) {
-      return { success: false, message: 'Invalid backup schema: Corrupted room records.' };
+      return { success: false, message: 'Invalid backup schema: Corrupted room records (missing id, buildingId, roomNo, valid capacity, type, or status).' };
     }
 
     const invalidTimetable = data.timetable.some(function(t) {
-      return !t || typeof t !== 'object' || !t.id || !t.roomId || typeof t.weekday !== 'number' || typeof t.slot !== 'number';
+      return !t || typeof t !== 'object' ||
+             typeof t.id !== 'string' || !t.id.trim() ||
+             typeof t.roomId !== 'string' || !t.roomId.trim() ||
+             typeof t.weekday !== 'number' || t.weekday < 1 || t.weekday > 6 ||
+             typeof t.slot !== 'number' || t.slot < 1 || t.slot > 9 ||
+             typeof t.course !== 'string' || !t.course.trim();
     });
     if (invalidTimetable) {
-      return { success: false, message: 'Invalid backup schema: Corrupted timetable entries.' };
+      return { success: false, message: 'Invalid backup schema: Corrupted timetable entries (missing id, roomId, course, or valid weekday/slot).' };
     }
 
     const invalidBooking = data.bookings.some(function(b) {
-      return !b || typeof b !== 'object' || !b.id || !b.ref || !b.roomId || !b.date || !b.status;
+      return !b || typeof b !== 'object' ||
+             typeof b.id !== 'string' || !b.id.trim() ||
+             typeof b.ref !== 'string' || !b.ref.trim() ||
+             typeof b.roomId !== 'string' || !b.roomId.trim() ||
+             typeof b.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.date) ||
+             typeof b.status !== 'string' || !b.status.trim() ||
+             typeof b.startSlot !== 'number' || b.startSlot < 1 || b.startSlot > 9 ||
+             typeof b.endSlot !== 'number' || b.endSlot < 1 || b.endSlot > 9 || b.endSlot < b.startSlot;
     });
     if (invalidBooking) {
-      return { success: false, message: 'Invalid backup schema: Corrupted booking records.' };
+      return { success: false, message: 'Invalid backup schema: Corrupted booking records (missing id, ref, roomId, date, valid slots, or status).' };
     }
 
     // 2. Snapshot current state for rollback protection
@@ -314,5 +336,14 @@ const Store = {
     }
 
     return { success: true, message: 'Backup successfully restored.' };
+  },
+
+  /**
+   * Alias for importBackup to support both naming conventions.
+   * @param {string} jsonString
+   * @returns {{ success: boolean, message: string }}
+   */
+  importData: function(jsonString) {
+    return this.importBackup(jsonString);
   }
 };

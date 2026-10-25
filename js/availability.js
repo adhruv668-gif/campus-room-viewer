@@ -286,7 +286,7 @@ const Availability = {
   renderGrid: function(containerEl, filterOverrides) {
     const settings = Store.get('SETTINGS') || {};
     const viewPrefs = settings.viewPrefs || { filters: {}, viewMode: 'grid' };
-    const savedFilters = viewPrefs.filters || {};
+    const savedFilters = (typeof App !== 'undefined' && App.state && App.state.filters && App.state.filters.grid) || viewPrefs.filters || {};
 
     const activeFilters = {
       date: (filterOverrides && filterOverrides.date) || savedFilters.date || Utils.getLocalDateString(Utils.getNow()),
@@ -296,7 +296,7 @@ const Availability = {
       facilities: savedFilters.facilities || [],
       onlyFree: Boolean(savedFilters.onlyFree),
       searchQuery: savedFilters.searchQuery || '',
-      viewMode: viewPrefs.viewMode || 'grid'
+      viewMode: savedFilters.viewMode || viewPrefs.viewMode || 'grid'
     };
 
     const buildings = Rooms.getAllBuildings();
@@ -353,6 +353,9 @@ const Availability = {
           </div>
         </div>
       </div>
+
+      <!-- Sunday Academic Notice Container -->
+      <div id="avail-sunday-banner"></div>
 
       <!-- Main Display Container -->
       <div id="avail-display-container"></div>
@@ -421,9 +424,30 @@ const Availability = {
         self.renderCards(displayEl, filtered, activeFilters.date);
       }
 
+      // Render Sunday academic notice if selected date falls on Sunday
+      const sundayBannerEl = document.getElementById('avail-sunday-banner');
+      if (sundayBannerEl) {
+        const isSunday = Utils.getWeekday(activeFilters.date) === 0;
+        if (isSunday) {
+          sundayBannerEl.innerHTML = `
+            <div class="card" style="margin-bottom: var(--space-4); border-left: 4px solid var(--accent-primary); background-color: var(--bg-subtle); display: flex; align-items: center; gap: var(--space-3);">
+              <span style="font-size: 1.5rem;" aria-hidden="true">&#128197;</span>
+              <div>
+                <strong>Sunday Academic Schedule:</strong> Regular curriculum classes are off on Sundays. All non-maintenance rooms are free from recurring timetable schedules.
+              </div>
+            </div>
+          `;
+        } else {
+          sundayBannerEl.innerHTML = '';
+        }
+      }
+
       // Persist filter preferences
       settings.viewPrefs = { filters: activeFilters, viewMode: activeFilters.viewMode };
       Store.set('SETTINGS', settings);
+      if (typeof App !== 'undefined' && App.state && App.state.filters) {
+        App.state.filters.grid = Object.assign({}, activeFilters);
+      }
     };
 
     renderContent();
@@ -746,7 +770,13 @@ const Availability = {
     }
 
     // Modal action buttons
-    const onConfirmAction = (!slotInfo.isPast && (slotInfo.status === 'Free' || slotInfo.status === 'Requested')) ? function() {
+    const now = Utils.getNow();
+    const todayStr = Utils.getLocalDateString(now);
+    const slotStartMinutes = (slotDef && slotDef.startHour !== undefined) ? (slotDef.startHour * 60 + slotDef.startMin) : 0;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const isStarted = (dateStr === todayStr && nowMinutes >= slotStartMinutes);
+
+    const onConfirmAction = (!slotInfo.isPast && !isStarted && (slotInfo.status === 'Free' || slotInfo.status === 'Requested')) ? function() {
       UI.closeModal();
       window.location.hash = `#/request?roomId=${room.id}&date=${dateStr}&startSlot=${slotNumber}&endSlot=${slotNumber}`;
     } : null;
@@ -762,43 +792,56 @@ const Availability = {
     const todayStr = Utils.getLocalDateString(Utils.getNow());
     const buildings = Rooms.getAllBuildings();
 
+    const savedFinder = (typeof App !== 'undefined' && App.state && App.state.filters && App.state.filters.finder) || {};
+    const initialDate = savedFinder.date || todayStr;
+    const initialStartSlot = savedFinder.startSlot || 1;
+    const initialEndSlot = savedFinder.endSlot || 1;
+    const initialAttendees = savedFinder.attendees || 30;
+    const initialBuildingId = savedFinder.buildingId || '';
+    const initialType = savedFinder.type || '';
+    const initialFacilities = savedFinder.facilities || [];
+
     let bldgOptions = '<option value="">Any Building</option>';
     buildings.forEach(function(b) {
-      bldgOptions += `<option value="${Utils.escapeHTML(b.id)}">${Utils.escapeHTML(b.name)}</option>`;
+      bldgOptions += `<option value="${Utils.escapeHTML(b.id)}" ${b.id === initialBuildingId ? 'selected' : ''}>${Utils.escapeHTML(b.name)}</option>`;
     });
 
     let typeOptions = '<option value="">Any Room Type</option>';
     Config.ROOM_TYPES.forEach(function(t) {
-      typeOptions += `<option value="${t}">${t}</option>`;
+      typeOptions += `<option value="${t}" ${t === initialType ? 'selected' : ''}>${t}</option>`;
     });
 
     let facCheckboxes = '';
     Config.FACILITIES.forEach(function(f) {
+      const isChecked = initialFacilities.includes(f) ? 'checked' : '';
       facCheckboxes += `
         <label class="checkbox-label" style="font-size: var(--text-xs);">
-          <input type="checkbox" name="finder_facility" value="${f}" class="checkbox-input"> ${f}
+          <input type="checkbox" name="finder_facility" value="${f}" class="checkbox-input" ${isChecked}> ${f}
         </label>
       `;
     });
 
     containerEl.innerHTML = `
+      <!-- Sunday Notice Banner Container -->
+      <div id="finder-sunday-banner"></div>
+
       <div class="card" style="margin-bottom: var(--space-6);">
         <form id="finder-form" style="display: flex; flex-direction: column; gap: var(--space-4);">
           <div class="grid-3col">
             <div class="form-group">
               <label for="find-date" class="form-label form-label-required">Reservation Date</label>
-              <input type="date" id="find-date" class="form-input" value="${todayStr}" min="${todayStr}" required />
+              <input type="date" id="find-date" class="form-input" value="${Utils.escapeHTML(initialDate)}" min="${todayStr}" required />
             </div>
             <div class="form-group">
               <label for="find-start-slot" class="form-label form-label-required">From Slot</label>
               <select id="find-start-slot" class="form-select">
-                ${Config.SLOTS.map(function(s) { return `<option value="${s.id}">${s.label} (${s.start})</option>`; }).join('')}
+                ${Config.SLOTS.map(function(s) { return `<option value="${s.id}" ${s.id === initialStartSlot ? 'selected' : ''}>${s.label} (${s.start})</option>`; }).join('')}
               </select>
             </div>
             <div class="form-group">
               <label for="find-end-slot" class="form-label form-label-required">To Slot</label>
               <select id="find-end-slot" class="form-select">
-                ${Config.SLOTS.map(function(s) { return `<option value="${s.id}">${s.label} (${s.end})</option>`; }).join('')}
+                ${Config.SLOTS.map(function(s) { return `<option value="${s.id}" ${s.id === initialEndSlot ? 'selected' : ''}>${s.label} (${s.end})</option>`; }).join('')}
               </select>
             </div>
           </div>
@@ -806,7 +849,7 @@ const Availability = {
           <div class="grid-3col">
             <div class="form-group">
               <label for="find-attendees" class="form-label form-label-required">Expected Attendees</label>
-              <input type="number" id="find-attendees" class="form-input" value="30" min="1" max="500" required />
+              <input type="number" id="find-attendees" class="form-input" value="${initialAttendees}" min="1" max="500" required />
             </div>
             <div class="form-group">
               <label for="find-building" class="form-label">Preferred Building</label>
@@ -835,6 +878,33 @@ const Availability = {
 
     const self = this;
     const form = document.getElementById('finder-form');
+
+    const updateSundayBanner = function(dateVal) {
+      const bannerEl = document.getElementById('finder-sunday-banner');
+      if (!bannerEl) return;
+      const isSunday = Utils.getWeekday(dateVal) === 0;
+      if (isSunday) {
+        bannerEl.innerHTML = `
+          <div class="card" style="margin-bottom: var(--space-4); border-left: 4px solid var(--accent-primary); background-color: var(--bg-subtle); display: flex; align-items: center; gap: var(--space-3);">
+            <span style="font-size: 1.5rem;" aria-hidden="true">&#128197;</span>
+            <div>
+              <strong>Sunday Academic Schedule:</strong> Regular classes are off on Sundays. All non-maintenance rooms are free from recurring timetable schedules.
+            </div>
+          </div>
+        `;
+      } else {
+        bannerEl.innerHTML = '';
+      }
+    };
+
+    const findDateInput = document.getElementById('find-date');
+    if (findDateInput) {
+      findDateInput.addEventListener('change', function(e) {
+        updateSundayBanner(e.target.value);
+      });
+    }
+    updateSundayBanner(initialDate);
+
     const executeSearch = function() {
       const date = document.getElementById('find-date').value;
       const startSlot = parseInt(document.getElementById('find-start-slot').value, 10);
@@ -850,6 +920,19 @@ const Availability = {
       if (endSlot < startSlot) {
         UI.showToast('To Slot cannot be earlier than From Slot.', 'error');
         return;
+      }
+
+      // Persist active finder filter state
+      if (typeof App !== 'undefined' && App.state && App.state.filters) {
+        App.state.filters.finder = {
+          date: date,
+          startSlot: startSlot,
+          endSlot: endSlot,
+          attendees: attendees,
+          buildingId: buildingId,
+          type: type,
+          facilities: checkedFacilities
+        };
       }
 
       const results = self.findFreeRooms({

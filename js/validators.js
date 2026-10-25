@@ -169,17 +169,17 @@ const Validators = {
       return { valid: false, error: `${requesterType}s can book at most ${maxAllowed} consecutive slots per request.` };
     }
 
-    // Check if slot has already ended if the requested date is today
+    // Check if slot has already started or passed if the requested date is today
     const now = Utils.getNow();
     const todayStr = Utils.getLocalDateString(now);
 
     if (dateStr === todayStr) {
       const slotDef = Config.SLOTS.find(function(s) { return s.id === startSlot; });
       if (slotDef) {
-        const slotEndMinutes = slotDef.endHour * 60 + slotDef.endMin;
+        const slotStartMinutes = slotDef.startHour * 60 + slotDef.startMin;
         const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        if (nowMinutes >= slotEndMinutes) {
-          return { valid: false, error: `Slot ${startSlot} (${slotDef.start} - ${slotDef.end}) has already ended today. Select a future slot.` };
+        if (nowMinutes >= slotStartMinutes) {
+          return { valid: false, error: `Slot ${startSlot} (${slotDef.start} - ${slotDef.end}) has already started or passed today. Select an upcoming slot.` };
         }
       }
     }

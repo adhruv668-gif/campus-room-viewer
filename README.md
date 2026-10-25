@@ -19,7 +19,7 @@ A lightweight, responsive single-page web application designed for academic camp
 
 ### Key Features
 - **Campus Dashboard**: Summary KPI metrics computed dynamically from local demo data, pure CSS building occupancy and slot load charts, and quick-reserve shortcuts for currently free rooms.
-- **Availability Explorer**: 9-slot daily timetable grid (09:00–18:00, Mon–Sat) across 28 campus rooms in 4 academic blocks (Block 32, 34, 38, Tech Center) evaluated client-side against local schedules.
+- **Availability Explorer**: 9-slot daily timetable grid (09:00–18:00, Mon–Sat) across 28 campus rooms in 4 academic blocks (Block 32 (B32), Block 33 (B33), Block 34 (B34), and Lab Block (BLAB)) evaluated client-side against local schedules.
 - **Room Finder**: Filters rooms by date, slot duration, minimum capacity, and facilities (Projector, AC, Wi-Fi, Smart Board).
 - **Booking Engine**: Enforces role quotas (Student: max 2 consecutive slots, 3 active upcoming requests; Faculty: max 4 slots, 6 active requests) with 8-digit student ID and alphanumeric faculty ID validation.
 - **Conflict Detection & Pending Request Policy**: Uses range overlap logic $(s1 \le e2) \land (s2 \le e1)$ to strictly block submission against hard conflicts (scheduled lectures, maintenance windows, and approved bookings). Competing pending requests do not hard-block submission; they generate an advisory notice and enter coordinator review, where approving one request automatically cascades rejections to competing pending submissions.
@@ -83,6 +83,9 @@ campus-room-viewer/
 │   ├── bookings.js         # Booking form, conflict alerts, approval cascade logic
 │   ├── dashboard.js        # KPI calculations, pure CSS occupancy and slot charts
 │   └── app.js              # Hash router, route guards, help view, app bootstrap
+│
+├── test/
+│   └── test-suite.js       # Node.js automated test runner and regression assertions
 │
 └── docs/
     ├── viva-guide.md       # Code explanations and viva defense questions

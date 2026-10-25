@@ -72,6 +72,8 @@ const context = {
   localStorage: mockLocalStorage,
   sessionStorage: mockSessionStorage,
   UI: mockUI,
+  addEventListener: function() {},
+  removeEventListener: function() {},
   document: {
     documentElement: { setAttribute: function() {}, getAttribute: function() {} },
     getElementById: function() { return null; },
@@ -101,17 +103,23 @@ loadScript('js/utils.js', 'Utils');
 loadScript('js/store.js', 'Store');
 loadScript('js/seed.js', 'Seed');
 loadScript('js/validators.js', 'Validators');
+loadScript('js/ui.js', 'UI');
 loadScript('js/rooms.js', 'Rooms');
 loadScript('js/availability.js', 'Availability');
 loadScript('js/bookings.js', 'Bookings');
+loadScript('js/dashboard.js', 'Dashboard');
+loadScript('js/app.js', 'App');
 
 const Config = context.Config;
 const Utils = context.Utils;
 const Store = context.Store;
 const Validators = context.Validators;
+const UI = context.UI;
 const Rooms = context.Rooms;
 const Availability = context.Availability;
 const Bookings = context.Bookings;
+const Dashboard = context.Dashboard;
+const App = context.App;
 
 let passedTests = 0;
 let totalTests = 0;
@@ -224,6 +232,25 @@ runTest('Date validation: Past date is rejected', () => {
   assert.strictEqual(res.error, 'Booking date cannot be in the past. Select today or an upcoming date.');
 });
 
+runTest('Slot validation: Same-day booking rejects slot that has already started today', () => {
+  Store.init();
+  const testDate = getUpcomingDateForWeekday(3); // a Wednesday
+  // Set virtual clock to 10:15 on testDate. Slot 2 (10:00 - 11:00) has already started.
+  Store.set('SETTINGS', { simulatedNow: `${testDate}T10:15:00` });
+
+  // Slot 2 has already started today
+  const resStarted = Validators.validateSlots(2, 2, Config.ROLES.STUDENT, testDate);
+  assert.strictEqual(resStarted.valid, false);
+  assert.ok(resStarted.error && resStarted.error.includes('already started or passed today'));
+
+  // Slot 3 (11:00 - 12:00) is upcoming
+  const resUpcoming = Validators.validateSlots(3, 3, Config.ROLES.STUDENT, testDate);
+  assert.strictEqual(resUpcoming.valid, true);
+
+  // Restore simulated clock
+  Store.set('SETTINGS', {});
+});
+
 
 // ----------------------------------------------------
 // 2. CONFLICT DETECTION TESTS
@@ -318,6 +345,50 @@ runTest('No Conflict on adjacent non-overlapping slots', () => {
   // Query adjacent slot 9 only
   const conflicts = Availability.findConflicts('room-32-101', testDate, 9, 9);
   assert.strictEqual(conflicts.length, 0, 'Adjacent non-overlapping slot should produce 0 conflicts');
+});
+
+runTest('Bookings.updatePendingBooking(): Edits request without self-conflict on same or adjusted slot', () => {
+  Store.init();
+  const testDate = getUpcomingDateForWeekday(3); // Wednesday slot 9 is free in room-32-101
+  const testRoomId = 'room-32-101';
+
+  // Create a pending booking for slot 9
+  const createRes = Bookings.createBooking({
+    roomId: testRoomId,
+    date: testDate,
+    startSlot: 9,
+    endSlot: 9,
+    requesterName: 'Self Conflict Tester',
+    requesterId: '12699991',
+    requesterType: 'Student',
+    attendees: 20,
+    email: 'selfconflict@lpu.in',
+    purpose: 'Initial request before editing',
+    declaration: true
+  });
+  assert.strictEqual(createRes.success, true);
+  const bookingId = createRes.booking.id;
+
+  // Edit the pending booking with updated purpose keeping the exact same slot 9
+  const updateResSame = Bookings.updatePendingBooking(bookingId, {
+    roomId: testRoomId,
+    date: testDate,
+    startSlot: 9,
+    endSlot: 9,
+    requesterName: 'Self Conflict Tester',
+    requesterId: '12699991',
+    requesterType: 'Student',
+    attendees: 22,
+    email: 'selfconflict@lpu.in',
+    purpose: 'Updated purpose details without slot change',
+    declaration: true
+  });
+  assert.strictEqual(updateResSame.success, true, 'Should update successfully without conflicting with self');
+
+  // Verify booking reflects updated purpose and attendee count
+  const updatedBooking = Bookings.getById(bookingId);
+  assert.strictEqual(updatedBooking.purpose, 'Updated purpose details without slot change');
+  assert.strictEqual(updatedBooking.attendees, 22);
 });
 
 
@@ -870,6 +941,80 @@ runTest('Store.isStorageAvailable(): Reports correct boolean status', () => {
 
   mockLocalStorage.setItem = originalSetItem;
   Store._isStorageAvailable = true;
+});
+
+runTest('Backup Import: Strict validation rejects records missing required fields or types', () => {
+  Store.init();
+  const originalRoomsCount = Store.get('ROOMS').length;
+
+  // Payload with room record missing capacity and status
+  const invalidRoomPayload = JSON.stringify({
+    version: '1.0',
+    buildings: [{ id: 'bldg-1', code: 'B1', name: 'Block 1' }],
+    rooms: [{ id: 'room-1', buildingId: 'bldg-1', roomNo: '101', name: 'R101', type: 'Classroom' }], // missing capacity and status
+    timetable: [],
+    bookings: []
+  });
+
+  const res = Store.importBackup(invalidRoomPayload);
+  assert.strictEqual(res.success, false);
+  assert.ok(res.message.includes('Corrupted room records'), 'Expected rejection for missing capacity and status');
+  assert.strictEqual(Store.get('ROOMS').length, originalRoomsCount);
+
+  // Test Store.importData alias works identically
+  const resAlias = Store.importData(invalidRoomPayload);
+  assert.strictEqual(resAlias.success, false);
+});
+
+runTest('App Filter State: Persists user-selected filters across route navigation', () => {
+  Store.init();
+  App.state.filters.grid = {
+    buildingId: 'bldg-32',
+    type: 'Classroom',
+    minCapacity: '40',
+    date: '2026-11-05'
+  };
+
+  App.state.filters.finder = {
+    date: '2026-11-05',
+    startSlot: 3,
+    endSlot: 4,
+    attendees: 45,
+    buildingId: 'bldg-33',
+    type: 'Seminar Hall'
+  };
+
+  // Verify filters retained in App.state
+  assert.strictEqual(App.state.filters.grid.buildingId, 'bldg-32');
+  assert.strictEqual(App.state.filters.grid.date, '2026-11-05');
+  assert.strictEqual(App.state.filters.finder.startSlot, 3);
+  assert.strictEqual(App.state.filters.finder.attendees, 45);
+});
+
+runTest('Modal System: Idempotent initialization prevents duplicate event listener registration', () => {
+  let addListenerCalls = 0;
+  const mockDialog = {
+    addEventListener: function(event, fn) {
+      addListenerCalls++;
+    }
+  };
+  const originalGetById = context.document.getElementById;
+  context.document.getElementById = function(id) {
+    if (id === 'app-modal') return mockDialog;
+    return null;
+  };
+
+  UI._modalInitialized = false;
+  UI.initModal();
+  assert.strictEqual(UI._modalInitialized, true);
+  const initialListenerCount = addListenerCalls;
+  assert.ok(initialListenerCount > 0, 'Should have registered listeners on dialog');
+
+  // Re-calling initModal should be a no-op and NOT register new listeners
+  UI.initModal();
+  assert.strictEqual(addListenerCalls, initialListenerCount, 'Duplicate calls must not re-attach listeners');
+
+  context.document.getElementById = originalGetById;
 });
 
 console.log('\n====================================================');
