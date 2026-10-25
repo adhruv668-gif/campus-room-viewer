@@ -9,7 +9,9 @@
 
 **Execution Command:** `node test/test-suite.js`  
 **Execution Environment:** Node.js v24.19.0 (Windows x64)  
-**Result:** **33 of 33 Passed (100%)** | **0 Failed**
+**Result:** **37 of 37 Passed (100%)** | **0 Failed**
+
+> **Note on Test Suite Grep Count:** Searching `test/test-suite.js` for the string `runTest(` produces **38 matches**: exactly 1 is the harness declaration `function runTest(name, fn)`, and 37 are the discrete test case executions (`AUT-01` through `AUT-37`). Exactly 37 tests register, execute, and pass synchronously.
 
 ### 1.1 Validation Subsystem
 | Test ID | Test Case Description | Input / Condition | Expected Result | Status |
@@ -53,31 +55,35 @@
 | **AUT-21** | `Store.set()` catches `QuotaExceededError` | Mock `localStorage.setItem` throws | Returns `false`, sets `_isStorageAvailable = false`, retains in memory cache | **Pass** |
 | **AUT-22** | `Bookings.createBooking()` storage failure | `Store.addItem` returns `false` | Returns `success: false` with `"Storage write failed"` error | **Pass** |
 | **AUT-23** | `Rooms.toggleMaintenance()` storage failure | `Store.updateItem` returns `false` | Returns `success: false` with `"Storage write failed"` message | **Pass** |
-| **AUT-24** | `Store.isStorageAvailable()` status reporting | Evaluates storage state | Returns `true` under normal operation; returns `false` upon storage exception | **Pass** |
+| **AUT-24** | `Bookings.createBooking()` rollback on settings fail | `Store.set('SETTINGS')` fails | Rolls back newly created booking from `BOOKINGS`, returns `success: false` | **Pass** |
+| **AUT-25** | `Rooms.deleteRoom()` rollback on timetable fail | `Store.set('TIMETABLE')` fails | Rolls back room deletion, preserving room in `ROOMS`, returns `success: false` | **Pass** |
+| **AUT-26** | `Store.isStorageAvailable()` status reporting | Evaluates storage state | Returns `true` under normal operation; returns `false` upon storage exception | **Pass** |
 
 ### 1.6 HTML & XSS Injection Prevention Subsystem
 | Test ID | Test Case Description | Input / Condition | Expected Result | Status |
 | :---: | :--- | :--- | :--- | :---: |
-| **AUT-25** | `<script>` tag escaping | `"<script>alert(\"XSS\")</script>"` | Evaluates to `"&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;"` | **Pass** |
-| **AUT-26** | `<img>` onerror payload escaping | `"<img src=x onerror=alert(1)>"` | Evaluates to `"&lt;img src=x onerror=alert(1)&gt;"` | **Pass** |
-| **AUT-27** | Attribute and SQL delimiter escaping | `"' OR 1=1 --"` | Evaluates to `"&#39; OR 1=1 --"` | **Pass** |
-| **AUT-28** | Full character set sanitization | `"& < > \" '"` | Evaluates to `"&amp; &lt; &gt; &quot; &#39;"` | **Pass** |
-| **AUT-29** | Primitives & null safety | `null`, `undefined`, `12345`, `true` | Returns `""` for null/undefined, string representation for numbers/booleans | **Pass** |
+| **AUT-27** | `<script>` tag escaping | `"<script>alert(\"XSS\")</script>"` | Evaluates to `"&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;"` | **Pass** |
+| **AUT-28** | `<img>` onerror payload escaping | `"<img src=x onerror=alert(1)>"` | Evaluates to `"&lt;img src=x onerror=alert(1)&gt;"` | **Pass** |
+| **AUT-29** | Attribute and SQL delimiter escaping | `"' OR 1=1 --"` | Evaluates to `"&#39; OR 1=1 --"` | **Pass** |
+| **AUT-30** | Full character set sanitization | `"& < > \" '"` | Evaluates to `"&amp; &lt; &gt; &quot; &#39;"` | **Pass** |
+| **AUT-31** | Primitives & null safety | `null`, `undefined`, `12345`, `true` | Returns `""` for null/undefined, string representation for numbers/booleans | **Pass** |
+| **AUT-32** | Booking form prefilled XSS rendering | Date: `"><script>alert(1)</script>` | Attribute sanitized to `&quot;&gt;&lt;script&gt;...`; no raw executable script in DOM | **Pass** |
+| **AUT-33** | Availability card view XSS rendering | Room & facility with `<img>` and `<script>` | Rendered HTML contains only entity-encoded representations; zero injection tags | **Pass** |
 
 ### 1.7 Atomic Cascade & Staged Backup Rollback Subsystem
 | Test ID | Test Case Description | Input / Condition | Expected Result | Status |
 | :---: | :--- | :--- | :--- | :---: |
-| **AUT-30** | Backup import rejects incomplete schema | JSON payload missing `rooms`, `timetable`, `bookings` | Returns `success: false`, `"Missing required collections"`, state unchanged | **Pass** |
-| **AUT-31** | Backup import rejects malformed JSON | Invalid JSON string `"This is not JSON {{{{"` | Returns `success: false`, `"Corrupted JSON"`, state unchanged | **Pass** |
-| **AUT-32** | Backup import staged rollback on storage failure | Write failure during staged `TIMETABLE` commit | All collections rolled back to pre-import snapshot; returns `success: false` | **Pass** |
-| **AUT-33** | Booking approval atomic cascade failure handling | Write failure during atomic `BOOKINGS` commit | Target booking remains `Pending`; returns `success: false` without partial updates | **Pass** |
+| **AUT-34** | Backup import rejects incomplete schema | JSON payload missing `rooms`, `timetable`, `bookings` | Returns `success: false`, `"Missing required collections"`, state unchanged | **Pass** |
+| **AUT-35** | Backup import rejects malformed JSON | Invalid JSON string `"This is not JSON {{{{"` | Returns `success: false`, `"Corrupted JSON"`, state unchanged | **Pass** |
+| **AUT-36** | Backup import staged rollback on storage failure | Write failure during staged `TIMETABLE` commit | All collections rolled back to pre-import snapshot; returns `success: false` | **Pass** |
+| **AUT-37** | Booking approval atomic cascade failure handling | Write failure during atomic `BOOKINGS` commit | Target booking remains `Pending`; returns `success: false` without partial updates | **Pass** |
 
 ---
 
 ## 2. Executed Failed Tests
 
 - **Failed Count:** **0**
-- All 33 automated tests execute synchronously and pass cleanly without unhandled rejections or runtime exceptions.
+- All 37 automated tests execute synchronously and pass cleanly without unhandled rejections or runtime exceptions.
 
 ---
 
@@ -110,11 +116,17 @@ These manual scenarios verify client-side interactive rendering, CSS layout anim
 3. **Maintenance Mode Cancellation Safety:**  
    `Rooms.toggleMaintenance()` skips cancelling bookings scheduled earlier today whose slot end time has passed, preserving historical logs. Validated by **AUT-20**.
 
-4. **Atomic Booking Approval Cascade:**  
-   `Bookings.approveBooking()` modifies both the target booking and all competing pending requests in a single cloned array and writes it atomically with `Store.set('BOOKINGS', clonedBookings)`. Validated by **AUT-33**.
+4. **Multi-Collection Booking Rollback:**  
+   `Bookings.createBooking()` rolls back the newly created booking from `BOOKINGS` if persisting requester profile details to `SETTINGS` fails. Validated by **AUT-24**.
 
-5. **Staged Backup Import & Rollback:**  
-   `Store.importBackup()` validates all collections before initiating writes, snapshots state, and executes a full rollback if any individual key write fails. Validated by **AUT-30**, **AUT-31**, and **AUT-32**.
+5. **Room Deletion Timetable Rollback:**  
+   `Rooms.deleteRoom()` rolls back room deletion if timetable cleanup fails. Validated by **AUT-25**.
 
-6. **XSS Injection Payload Prevention:**  
-   All dynamic dialog titles, table cells, and card badges are passed through `Utils.escapeHTML()`, neutralizing `<script>`, `<img>`, quotes, and angle brackets. Validated by **AUT-25** through **AUT-29**.
+6. **Atomic Booking Approval Cascade:**  
+   `Bookings.approveBooking()` modifies both the target booking and all competing pending requests in a single cloned array and writes it atomically with `Store.set('BOOKINGS', clonedBookings)`. Validated by **AUT-37**.
+
+7. **Staged Backup Import & Rollback:**  
+   `Store.importBackup()` validates all collections before initiating writes, snapshots state, and executes a full rollback if any individual key write fails. Validated by **AUT-34**, **AUT-35**, and **AUT-36**.
+
+8. **XSS Injection Payload Prevention:**  
+   All dynamic dialog titles, table cells, form values, and card badges are passed through `Utils.escapeHTML()`, neutralizing `<script>`, `<img>`, quotes, and angle brackets in both string and rendered DOM contexts. Validated by **AUT-27** through **AUT-33**.

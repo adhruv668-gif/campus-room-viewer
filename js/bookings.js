@@ -211,7 +211,7 @@ const Bookings = {
       return { success: false, errors: { form: 'Storage write failed. Request could not be saved.' } };
     }
 
-    // 5. Remember requester details in settings
+    // 5. Remember requester details in settings with atomic rollback if settings write fails
     const settings = Store.get('SETTINGS') || {};
     settings.lastRequester = {
       type: formData.requesterType,
@@ -220,7 +220,11 @@ const Bookings = {
       email: newBooking.email,
       phone: newBooking.phone
     };
-    Store.set('SETTINGS', settings);
+    const settingsSaved = Store.set('SETTINGS', settings);
+    if (!settingsSaved) {
+      Store.removeItem('BOOKINGS', newBooking.id);
+      return { success: false, errors: { form: 'Storage write failed. Request could not be saved.' } };
+    }
 
     return { success: true, ref: ref };
   },
@@ -528,7 +532,7 @@ const Bookings = {
         rows += `
           <tr>
             <td data-label="Reference">
-              <button class="footer-link-btn view-details-btn" data-id="${b.id}" type="button" style="font-weight: bold;">
+              <button class="footer-link-btn view-details-btn" data-id="${Utils.escapeHTML(b.id)}" type="button" style="font-weight: bold;">
                 ${Utils.escapeHTML(b.ref)}
               </button>
             </td>
@@ -544,13 +548,13 @@ const Bookings = {
             </td>
             <td data-label="Actions" style="text-align: right;">
               <div style="display: inline-flex; gap: 4px;">
-                <button class="btn btn-sm btn-subtle view-details-btn" data-id="${b.id}" type="button">Details</button>
+                <button class="btn btn-sm btn-subtle view-details-btn" data-id="${Utils.escapeHTML(b.id)}" type="button">Details</button>
                 ${isAdmin && computed === 'Pending' ? `
-                  <button class="btn btn-sm btn-accent req-approve-btn" data-id="${b.id}" type="button">Approve</button>
-                  <button class="btn btn-sm btn-danger req-reject-btn" data-id="${b.id}" type="button">Reject</button>
+                  <button class="btn btn-sm btn-accent req-approve-btn" data-id="${Utils.escapeHTML(b.id)}" type="button">Approve</button>
+                  <button class="btn btn-sm btn-danger req-reject-btn" data-id="${Utils.escapeHTML(b.id)}" type="button">Reject</button>
                 ` : ''}
-                ${canEdit ? `<a href="#/request?edit=${b.id}" class="btn btn-sm btn-secondary">Edit</a>` : ''}
-                ${canCancel ? `<button class="btn btn-sm btn-subtle req-cancel-btn" data-id="${b.id}" type="button" style="color: var(--color-danger);">Cancel</button>` : ''}
+                ${canEdit ? `<a href="#/request?edit=${encodeURIComponent(b.id)}" class="btn btn-sm btn-secondary">Edit</a>` : ''}
+                ${canCancel ? `<button class="btn btn-sm btn-subtle req-cancel-btn" data-id="${Utils.escapeHTML(b.id)}" type="button" style="color: var(--color-danger);">Cancel</button>` : ''}
               </div>
             </td>
           </tr>
@@ -892,14 +896,14 @@ const Bookings = {
     const initialBldgId = selectedRoom ? selectedRoom.buildingId : (buildings[0] ? buildings[0].id : '');
 
     buildings.forEach(function(b) {
-      bldgOptions += `<option value="${b.id}" ${b.id === initialBldgId ? 'selected' : ''}>${Utils.escapeHTML(b.name)}</option>`;
+      bldgOptions += `<option value="${Utils.escapeHTML(b.id)}" ${b.id === initialBldgId ? 'selected' : ''}>${Utils.escapeHTML(b.name)}</option>`;
     });
 
     const getRoomOptionsForBldg = function(bldgId, selRoomId) {
       const bRooms = rooms.filter(function(r) { return r.buildingId === bldgId && r.status === Config.ROOM_STATUS.ACTIVE; });
       let opts = '<option value="">-- Select Room --</option>';
       bRooms.forEach(function(r) {
-        opts += `<option value="${r.id}" ${r.id === selRoomId ? 'selected' : ''}>${Utils.escapeHTML(r.name)} (${r.roomNo} &bull; ${r.capacity} seats)</option>`;
+        opts += `<option value="${Utils.escapeHTML(r.id)}" ${r.id === selRoomId ? 'selected' : ''}>${Utils.escapeHTML(r.name)} (${Utils.escapeHTML(r.roomNo)} &bull; ${Utils.escapeHTML(String(r.capacity))} seats)</option>`;
       });
       return opts;
     };
@@ -918,7 +922,7 @@ const Bookings = {
 
     containerEl.innerHTML = `
       <div class="form-card" style="max-width: 800px; margin: 0 auto;">
-        <h2 style="margin-bottom: var(--space-4);">${isEdit ? `Edit Pending Request: ${editBooking.ref}` : 'Submit Room &amp; Lab Booking Request'}</h2>
+        <h2 style="margin-bottom: var(--space-4);">${isEdit ? `Edit Pending Request: ${Utils.escapeHTML(editBooking.ref)}` : 'Submit Room &amp; Lab Booking Request'}</h2>
         
         <form id="booking-request-form" novalidate>
           <!-- Fieldset 1: Who -->
@@ -983,7 +987,7 @@ const Bookings = {
             <div class="grid-3col">
               <div class="form-group">
                 <label for="req-date" class="form-label form-label-required">Date</label>
-                <input type="date" id="req-date" class="form-input" value="${initialData.date}" min="${todayStr}" required />
+                <input type="date" id="req-date" class="form-input" value="${Utils.escapeHTML(initialData.date)}" min="${todayStr}" required />
                 <div id="err-req-date" class="form-error"></div>
               </div>
               <div class="form-group">
@@ -1012,7 +1016,7 @@ const Bookings = {
             <legend class="form-legend">3. Purpose &amp; Requirements</legend>
             <div class="form-group">
               <label for="req-attendees" class="form-label form-label-required">Expected Attendees</label>
-              <input type="number" id="req-attendees" class="form-input" value="${initialData.attendees}" min="1" max="500" required />
+              <input type="number" id="req-attendees" class="form-input" value="${Utils.escapeHTML(String(initialData.attendees))}" min="1" max="500" required />
               <div id="err-req-attendees" class="form-error"></div>
             </div>
 
@@ -1050,45 +1054,57 @@ const Bookings = {
     // Dynamic Dependent Dropdown (Building -> Rooms)
     const bldgSelect = document.getElementById('req-bldg');
     const roomSelect = document.getElementById('req-room');
-    bldgSelect.addEventListener('change', function(e) {
-      roomSelect.innerHTML = getRoomOptionsForBldg(e.target.value, '');
-      updateLiveSlotCheck();
-    });
+    if (bldgSelect && roomSelect) {
+      bldgSelect.addEventListener('change', function(e) {
+        roomSelect.innerHTML = getRoomOptionsForBldg(e.target.value, '');
+        updateLiveSlotCheck();
+      });
+    }
 
     // Requester Role Radio change -> update ID label and slot limit
     const roleRadios = document.querySelectorAll('input[name="req_type"]');
     const idLabel = document.getElementById('lbl-req-id');
-    roleRadios.forEach(function(r) {
-      r.addEventListener('change', function(e) {
-        if (e.target.value === 'Student') {
-          idLabel.textContent = 'Registration Number (8 digits)';
-        } else {
-          idLabel.textContent = 'Employee ID (4-10 characters)';
-        }
-        updateLiveSlotCheck();
+    if (roleRadios && idLabel) {
+      roleRadios.forEach(function(r) {
+        r.addEventListener('change', function(e) {
+          if (e.target.value === 'Student') {
+            idLabel.textContent = 'Registration Number (8 digits)';
+          } else {
+            idLabel.textContent = 'Employee ID (4-10 characters)';
+          }
+          updateLiveSlotCheck();
+        });
       });
-    });
+    }
 
     // Character counter for purpose
     const purposeInput = document.getElementById('req-purpose');
     const purposeCounter = document.getElementById('purpose-counter');
     const updateCharCounter = function() {
+      if (!purposeInput || !purposeCounter) return;
       const len = purposeInput.value.length;
       purposeCounter.textContent = `${len} / 200`;
       purposeCounter.style.color = (len < 10 || len > 200) ? 'var(--color-danger)' : 'var(--text-muted)';
     };
-    purposeInput.addEventListener('input', updateCharCounter);
-    updateCharCounter();
+    if (purposeInput) {
+      purposeInput.addEventListener('input', updateCharCounter);
+      updateCharCounter();
+    }
 
     // Live Slot Conflict Check
     const updateLiveSlotCheck = Utils.debounce(function() {
       const liveBox = document.getElementById('live-slot-check');
-      if (!liveBox) return;
+      if (!liveBox || !roomSelect) return;
 
       const roomId = roomSelect.value;
-      const date = document.getElementById('req-date').value;
-      const startSlot = parseInt(document.getElementById('req-start-slot').value, 10);
-      const endSlot = parseInt(document.getElementById('req-end-slot').value, 10);
+      const dateEl = document.getElementById('req-date');
+      const startEl = document.getElementById('req-start-slot');
+      const endEl = document.getElementById('req-end-slot');
+      if (!dateEl || !startEl || !endEl) return;
+
+      const date = dateEl.value;
+      const startSlot = parseInt(startEl.value, 10);
+      const endSlot = parseInt(endEl.value, 10);
 
       if (!roomId || !date) {
         liveBox.innerHTML = 'Select a room and date to check slot availability.';
@@ -1113,15 +1129,19 @@ const Bookings = {
       }
     }, 200);
 
-    roomSelect.addEventListener('change', updateLiveSlotCheck);
-    document.getElementById('req-date').addEventListener('change', updateLiveSlotCheck);
-    document.getElementById('req-start-slot').addEventListener('change', updateLiveSlotCheck);
-    document.getElementById('req-end-slot').addEventListener('change', updateLiveSlotCheck);
+    if (roomSelect) roomSelect.addEventListener('change', updateLiveSlotCheck);
+    const dateInputEl = document.getElementById('req-date');
+    if (dateInputEl) dateInputEl.addEventListener('change', updateLiveSlotCheck);
+    const startSlotEl = document.getElementById('req-start-slot');
+    if (startSlotEl) startSlotEl.addEventListener('change', updateLiveSlotCheck);
+    const endSlotEl = document.getElementById('req-end-slot');
+    if (endSlotEl) endSlotEl.addEventListener('change', updateLiveSlotCheck);
     updateLiveSlotCheck();
 
     // Submit handler
     const form = document.getElementById('booking-request-form');
-    form.addEventListener('submit', function(e) {
+    if (form) {
+      form.addEventListener('submit', function(e) {
       e.preventDefault();
 
       // Clear previous error messages
@@ -1206,5 +1226,6 @@ const Bookings = {
         UI.showToast((result.errors && result.errors.form) || 'Please fix the errors in the form before submitting.', 'error');
       }
     });
+    }
   }
 };

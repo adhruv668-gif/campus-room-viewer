@@ -531,7 +531,7 @@ const Rooms = {
     const buildings = this.getAllBuildings();
     let bldgOptions = '<option value="">-- Select Building --</option>';
     buildings.forEach(function(b) {
-      bldgOptions += `<option value="${b.id}" ${b.id === room.buildingId ? 'selected' : ''}>${Utils.escapeHTML(b.name)} (${b.code})</option>`;
+      bldgOptions += `<option value="${Utils.escapeHTML(b.id)}" ${b.id === room.buildingId ? 'selected' : ''}>${Utils.escapeHTML(b.name)} (${Utils.escapeHTML(b.code)})</option>`;
     });
 
     let typeOptions = '';
@@ -833,7 +833,7 @@ const Rooms = {
             <td data-label="Faculty">${Utils.escapeHTML(item.faculty)}</td>
             <td data-label="Section"><span class="chip">${Utils.escapeHTML(item.section)}</span></td>
             <td data-label="Actions" style="text-align: right;">
-              <button class="btn btn-sm btn-danger tt-del-btn" data-id="${item.id}" type="button">Remove</button>
+              <button class="btn btn-sm btn-danger tt-del-btn" data-id="${Utils.escapeHTML(item.id)}" type="button">Remove</button>
             </td>
           </tr>
         `;
@@ -895,7 +895,7 @@ const Rooms = {
       addBtn.addEventListener('click', function() {
         let rOpts = '';
         rooms.forEach(function(r) {
-          rOpts += `<option value="${r.id}">${Utils.escapeHTML(r.name)} (${Utils.escapeHTML(r.roomNo)})</option>`;
+          rOpts += `<option value="${Utils.escapeHTML(r.id)}">${Utils.escapeHTML(r.name)} (${Utils.escapeHTML(r.roomNo)})</option>`;
         });
 
         const modalBody = `

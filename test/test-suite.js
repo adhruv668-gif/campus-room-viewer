@@ -591,6 +591,87 @@ runTest('Rooms.toggleMaintenance(): Fails gracefully when Store.updateItem fails
   Store.updateItem = originalUpdateItem;
 });
 
+runTest('Bookings.createBooking(): Rolls back newly added booking when SETTINGS write fails', () => {
+  Store.init();
+  const studentId = '12666666';
+  const testDate = getUpcomingDateForWeekday(3);
+
+  // Mock Store.set to fail when writing SETTINGS
+  const originalSet = Store.set;
+  Store.set = function(key, data) {
+    if (key === 'SETTINGS') {
+      return false; // simulate settings storage failure
+    }
+    return originalSet.call(Store, key, data);
+  };
+
+  const res = Bookings.createBooking({
+    roomId: 'room-32-101',
+    date: testDate,
+    startSlot: 9,
+    endSlot: 9,
+    requesterName: 'Settings Fail Tester',
+    requesterId: studentId,
+    requesterType: 'Student',
+    attendees: 10,
+    email: 'settingsfail@lpu.in',
+    purpose: 'Testing settings failure rollback',
+    declaration: true
+  });
+
+  // Restore Store.set
+  Store.set = originalSet;
+
+  assert.strictEqual(res.success, false);
+  assert.ok(res.errors && res.errors.form);
+  assert.ok(res.errors.form.includes('Storage write failed'));
+
+  // Verify that the booking was NOT left in BOOKINGS
+  const bookingInStore = Store.get('BOOKINGS').find(b => b.requesterId === studentId);
+  assert.strictEqual(bookingInStore, undefined, 'Orphaned booking must be rolled back if settings save fails');
+});
+
+runTest('Rooms.deleteRoom(): Rolls back room deletion if timetable cleanup write fails', () => {
+  Store.init();
+  const testRoomId = 'room-del-rollback-test';
+  Store.addItem('ROOMS', {
+    id: testRoomId,
+    buildingId: 'b32',
+    roomNo: '999',
+    name: 'Rollback Test Room',
+    floor: 1,
+    type: 'Classroom',
+    capacity: 30,
+    facilities: [],
+    status: 'Active',
+    notes: ''
+  });
+
+  // Mock Store.set to fail when writing TIMETABLE
+  const originalSet = Store.set;
+  Store.set = function(key, data) {
+    if (key === 'TIMETABLE') {
+      return false;
+    }
+    return originalSet.call(Store, key, data);
+  };
+
+  const res = Rooms.deleteRoom(testRoomId);
+
+  // Restore Store.set
+  Store.set = originalSet;
+
+  assert.strictEqual(res.success, false);
+  assert.ok(res.message.includes('Storage write failed'));
+
+  // Verify that the room still exists in ROOMS
+  const roomStillExists = Rooms.getById(testRoomId);
+  assert.ok(roomStillExists, 'Room must still exist after rollback');
+
+  // Clean up
+  Store.removeItem('ROOMS', testRoomId);
+});
+
 
 // ----------------------------------------------------
 // 6. HTML & XSS INJECTION PREVENTION TESTS
@@ -629,6 +710,40 @@ runTest('XSS Sanitization: Handles non-string primitives and null/undefined safe
   assert.strictEqual(Utils.escapeHTML(undefined), '');
   assert.strictEqual(Utils.escapeHTML(12345), '12345');
   assert.strictEqual(Utils.escapeHTML(true), 'true');
+});
+
+runTest('XSS Rendering: Neutralizes injection payloads in booking request form', () => {
+  Store.init();
+  const mockContainer = { innerHTML: '' };
+  Bookings.renderRequestForm(mockContainer, '', {
+    date: '"><script>alert(1)</script>',
+    roomId: 'room-32-101'
+  });
+
+  assert.strictEqual(mockContainer.innerHTML.includes('"><script>alert(1)</script>'), false);
+  assert.ok(mockContainer.innerHTML.includes('&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;'));
+});
+
+runTest('XSS Rendering: Neutralizes injection payloads in availability card views', () => {
+  Store.init();
+  const mockContainer = { innerHTML: '' };
+  const xssRoom = {
+    id: 'room-xss-1',
+    buildingId: 'b32',
+    roomNo: '<b onmouseover=alert(1)>',
+    name: '"><img src=x onerror=alert(1)>',
+    type: 'Classroom',
+    capacity: 50,
+    facilities: ['<script>alert("facility")</script>'],
+    status: 'Active'
+  };
+
+  Availability.renderCards(mockContainer, [xssRoom], getUpcomingDateForWeekday(3));
+
+  assert.strictEqual(mockContainer.innerHTML.includes('<img src=x onerror=alert(1)>'), false);
+  assert.strictEqual(mockContainer.innerHTML.includes('<script>alert("facility")</script>'), false);
+  assert.ok(mockContainer.innerHTML.includes('&lt;img src=x onerror=alert(1)&gt;'));
+  assert.ok(mockContainer.innerHTML.includes('&lt;script&gt;alert(&quot;facility&quot;)&lt;/script&gt;'));
 });
 
 

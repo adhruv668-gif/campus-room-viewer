@@ -149,13 +149,17 @@ const App = {
     }
 
     settings.role = newRole;
-    Store.set('SETTINGS', settings);
+    const persisted = Store.set('SETTINGS', settings);
 
     const roleSelect = document.getElementById('role-select');
     if (roleSelect) roleSelect.value = newRole;
 
     UI.closeModal();
-    UI.showToast(`Active role switched to ${newRole}.`, 'success');
+    if (persisted) {
+      UI.showToast(`Active role switched to ${newRole}.`, 'success');
+    } else {
+      UI.showToast(`Active role switched to ${newRole} (session only, storage unavailable).`, 'warning');
+    }
     UI.renderNavbar();
 
     // Re-render active screen under new persona permissions

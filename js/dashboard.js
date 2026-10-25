@@ -509,7 +509,7 @@ const Dashboard = {
 
       rowsHtml += `
         <div class="bar-row">
-          <div class="bar-label" title="${type}">${type}</div>
+          <div class="bar-label" title="${Utils.escapeHTML(type)}">${Utils.escapeHTML(type)}</div>
           <div class="bar-track">
             <div class="bar-fill" style="width: ${pct}%; background-color: var(--color-primary-light);"></div>
           </div>

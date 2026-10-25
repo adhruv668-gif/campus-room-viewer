@@ -305,7 +305,7 @@ const Availability = {
     // Build filter UI
     let bldgOptions = '<option value="">All Buildings</option>';
     buildings.forEach(function(b) {
-      bldgOptions += `<option value="${b.id}" ${b.id === activeFilters.buildingId ? 'selected' : ''}>${Utils.escapeHTML(b.name)}</option>`;
+      bldgOptions += `<option value="${Utils.escapeHTML(b.id)}" ${b.id === activeFilters.buildingId ? 'selected' : ''}>${Utils.escapeHTML(b.name)}</option>`;
     });
 
     let typeOptions = '<option value="">All Room Types</option>';
@@ -320,7 +320,7 @@ const Availability = {
           <!-- Date Navigator -->
           <div style="display: flex; align-items: center; gap: var(--space-2);">
             <button id="avail-prev-date-btn" class="btn btn-sm btn-secondary" type="button" aria-label="Previous Day">&larr; Prev</button>
-            <input type="date" id="avail-date-input" class="form-input" style="width: auto; min-height: 34px;" value="${activeFilters.date}" />
+            <input type="date" id="avail-date-input" class="form-input" style="width: auto; min-height: 34px;" value="${Utils.escapeHTML(activeFilters.date)}" />
             <button id="avail-next-date-btn" class="btn btn-sm btn-secondary" type="button" aria-label="Next Day">Next &rarr;</button>
             <button id="avail-today-date-btn" class="btn btn-sm btn-subtle" type="button">Today</button>
           </div>
@@ -670,7 +670,7 @@ const Availability = {
           </div>
 
           <div style="margin-top: var(--space-4); display: flex; justify-content: flex-end;">
-            <a href="#/request?roomId=${room.id}&date=${dateStr}" class="btn btn-sm btn-primary">Request Room</a>
+            <a href="#/request?roomId=${encodeURIComponent(room.id)}&date=${encodeURIComponent(dateStr)}" class="btn btn-sm btn-primary">Request Room</a>
           </div>
         </div>
       `;
@@ -764,7 +764,7 @@ const Availability = {
 
     let bldgOptions = '<option value="">Any Building</option>';
     buildings.forEach(function(b) {
-      bldgOptions += `<option value="${b.id}">${Utils.escapeHTML(b.name)}</option>`;
+      bldgOptions += `<option value="${Utils.escapeHTML(b.id)}">${Utils.escapeHTML(b.name)}</option>`;
     });
 
     let typeOptions = '<option value="">Any Room Type</option>';

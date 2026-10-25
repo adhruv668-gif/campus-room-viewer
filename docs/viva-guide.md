@@ -55,7 +55,7 @@ getSlotStatus: function(roomId, dateStr, slotNumber) {
 
 ### 1.5 Dhruv Anand: `Store.init()` (`js/store.js`)
 - Performs a feature-detection probe on `localStorage`. If third-party storage is blocked by browser privacy settings, it falls back to an internal memory dictionary so the application never crashes.
-- Validates `CAMPUS_ROOMS_SCHEMA_VERSION`. If outdated, resets and loads fresh seed data.
+- Validates `Config.STORAGE_KEYS.SCHEMA_VERSION` against `Config.SCHEMA_VERSION` (`'1.0'`). If outdated or missing, resets and loads fresh seed data.
 
 ### 1.6 Dhruv Anand: `App.navigate(routeHash)` (`js/app.js`)
 - Handles client-side hash routing (`window.addEventListener('hashchange')`).
