@@ -65,6 +65,7 @@ const mockUI = {
 const context = {
   console: console,
   Date: Date,
+  URLSearchParams: URLSearchParams,
   setTimeout: setTimeout,
   clearTimeout: clearTimeout,
   setInterval: setInterval,
@@ -72,6 +73,7 @@ const context = {
   localStorage: mockLocalStorage,
   sessionStorage: mockSessionStorage,
   UI: mockUI,
+  location: { hash: '#/dashboard' },
   addEventListener: function() {},
   removeEventListener: function() {},
   document: {
@@ -512,6 +514,7 @@ console.log('\n--- 4. Maintenance Cancellation Tests ---');
 
 runTest('Maintenance Mode: Toggling ON auto-cancels upcoming bookings in that room', () => {
   Store.init();
+  App.setRole(Config.ROLES.ADMIN, '1234');
   const futureDate = getUpcomingFutureDate(4);
   const targetRoomId = 'room-34-201';
 
@@ -540,6 +543,7 @@ runTest('Maintenance Mode: Toggling ON auto-cancels upcoming bookings in that ro
 
 runTest('Maintenance Mode: Does NOT cancel bookings whose slot has already ended earlier today', () => {
   Store.init();
+  App.setRole(Config.ROLES.ADMIN, '1234');
   const today = Utils.getNow();
   const todayStr = Utils.getLocalDateString(today);
   const targetRoomId = 'room-34-202';
@@ -655,6 +659,7 @@ runTest('Bookings.createBooking(): Fails gracefully when Store.addItem fails', (
 
 runTest('Rooms.toggleMaintenance(): Fails gracefully when Store.updateItem fails', () => {
   Store.init();
+  App.setRole(Config.ROLES.ADMIN, '1234');
 
   const originalUpdateItem = Store.updateItem;
   Store.updateItem = function() {
@@ -710,6 +715,7 @@ runTest('Bookings.createBooking(): Rolls back newly added booking when SETTINGS 
 
 runTest('Rooms.deleteRoom(): Rolls back room deletion if timetable cleanup write fails', () => {
   Store.init();
+  App.setRole(Config.ROLES.ADMIN, '1234');
   const testRoomId = 'room-del-rollback-test';
   Store.addItem('ROOMS', {
     id: testRoomId,
@@ -894,6 +900,7 @@ runTest('Backup Import: Staged rollback executes when a storage write fails', ()
 
 runTest('Bookings.approveBooking(): Atomic cascade returns false and leaves target pending if storage fails', () => {
   Store.init();
+  App.setRole(Config.ROLES.ADMIN, '1234');
   const testDate = getUpcomingDateForWeekday(3); // Wednesday slot 9 has no classes
 
   // Add a pending booking for slot 9
@@ -1021,6 +1028,30 @@ runTest('Modal System: Idempotent initialization prevents duplicate event listen
   assert.strictEqual(addListenerCalls, initialListenerCount, 'Duplicate calls must not re-attach listeners');
 
   context.document.getElementById = originalGetById;
+});
+
+runTest('Admin Authorization: Non-admin mutations are rejected with unauthorized error', () => {
+  Store.init();
+  // Ensure active role is non-admin (Student)
+  App.setRole(Config.ROLES.STUDENT);
+  assert.strictEqual(App.getCurrentRole(), Config.ROLES.STUDENT);
+
+  // Attempting coordinator actions without elevation must fail
+  const maintRes = Rooms.toggleMaintenance('room-32-101');
+  assert.strictEqual(maintRes.success, false);
+  assert.ok(maintRes.message.includes('Unauthorized'));
+
+  const delRoomRes = Rooms.deleteRoom('room-32-101');
+  assert.strictEqual(delRoomRes.success, false);
+  assert.ok(delRoomRes.message.includes('Unauthorized'));
+
+  const approveRes = Bookings.approveBooking('bk-dummy-id');
+  assert.strictEqual(approveRes.success, false);
+  assert.ok(approveRes.message.includes('Unauthorized'));
+
+  const rejectRes = Bookings.rejectBooking('bk-dummy-id', 'Test remark reason');
+  assert.strictEqual(rejectRes.success, false);
+  assert.ok(rejectRes.message.includes('Unauthorized'));
 });
 
 console.log('\n====================================================');

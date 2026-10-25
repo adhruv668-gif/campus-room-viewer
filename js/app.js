@@ -149,7 +149,22 @@ const App = {
       }
     });
 
-    // 10. Load Initial Route
+    // 10. Cross-Tab State Synchronization
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('storage', function(e) {
+        const appKeys = Object.values(Config.STORAGE_KEYS);
+        if (e.key && appKeys.includes(e.key)) {
+          if (Store && Store._memoryCache) {
+            try {
+              Store._memoryCache[e.key] = e.newValue ? JSON.parse(e.newValue) : null;
+            } catch (err) {}
+          }
+          App.navigate(window.location.hash || '#/dashboard');
+        }
+      });
+    }
+
+    // 11. Load Initial Route
     const initialHash = window.location.hash || '#/dashboard';
     this.navigate(initialHash);
   },
@@ -169,6 +184,17 @@ const App = {
         UI.showToast('Incorrect Admin PIN. Access denied.', 'error');
         return false;
       }
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('CAMPUS_ADMIN_SESSION', 'true');
+        }
+      } catch (e) {}
+    } else {
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('CAMPUS_ADMIN_SESSION');
+        }
+      } catch (e) {}
     }
 
     settings.role = newRole;
@@ -186,16 +212,28 @@ const App = {
     UI.renderNavbar();
 
     // Re-render active screen under new persona permissions
-    this.navigate(window.location.hash || '#/dashboard');
+    const currentHash = (typeof window !== 'undefined' && window.location && window.location.hash) ? window.location.hash : '#/dashboard';
+    this.navigate(currentHash);
     return true;
   },
 
   /**
    * Retrieves active user role.
+   * Bound to sessionStorage for elevated admin access to prevent tampering across sessions.
    * @returns {string}
    */
   getCurrentRole: function() {
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('CAMPUS_ADMIN_SESSION') === 'true') {
+        return Config.ROLES.ADMIN;
+      }
+    } catch (e) {}
+
     const settings = Store.get('SETTINGS') || {};
+    // If settings had Admin from previous sessions without active sessionStorage flag, fallback to Student
+    if (settings.role === Config.ROLES.ADMIN) {
+      return Config.ROLES.STUDENT;
+    }
     return settings.role || Config.ROLES.STUDENT;
   },
 
@@ -233,8 +271,10 @@ const App = {
 
     const targetSection = document.getElementById(`view-${route}`);
     if (!targetSection) {
-      // Fall back to dashboard if route unknown
-      this.navigate('#/dashboard');
+      // Fall back to dashboard if route unknown and not already attempting dashboard
+      if (route !== 'dashboard') {
+        this.navigate('#/dashboard');
+      }
       return;
     }
 

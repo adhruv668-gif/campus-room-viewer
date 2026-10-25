@@ -404,6 +404,13 @@
   box-shadow: var(--shadow-sm);
 }
 
+.grid-cell:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+  z-index: 10;
+  box-shadow: var(--shadow-md);
+}
+
 .grid-cell-content {
   display: flex;
   flex-direction: column;

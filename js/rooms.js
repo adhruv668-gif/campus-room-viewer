@@ -62,6 +62,10 @@ const Rooms = {
    * @returns {{ success: boolean, message: string }}
    */
   addRoom: function(roomData) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.' };
+    }
+
     const rooms = this.getAll();
     const validation = Validators.validateRoomForm(roomData, rooms);
     if (!validation.valid) {
@@ -96,6 +100,10 @@ const Rooms = {
    * @returns {{ success: boolean, message: string }}
    */
   updateRoom: function(id, patchObj) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.' };
+    }
+
     const existing = this.getById(id);
     if (!existing) {
       return { success: false, message: 'Room not found.' };
@@ -123,6 +131,10 @@ const Rooms = {
    * @returns {{ success: boolean, message: string }}
    */
   deleteRoom: function(id) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.' };
+    }
+
     const room = this.getById(id);
     if (!room) return { success: false, message: 'Room does not exist.' };
 
@@ -163,6 +175,10 @@ const Rooms = {
    * @returns {{ success: boolean, message: string, affectedBookings: number }}
    */
   toggleMaintenance: function(roomId) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.', affectedBookings: 0 };
+    }
+
     const room = this.getById(roomId);
     if (!room) return { success: false, message: 'Room not found.', affectedBookings: 0 };
 
@@ -264,6 +280,10 @@ const Rooms = {
    * @returns {{ success: boolean, message: string }}
    */
   addBuilding: function(bldgData) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.' };
+    }
+
     const bldgs = this.getAllBuildings();
     const validation = Validators.validateBuildingForm(bldgData, bldgs);
     if (!validation.valid) {
@@ -292,6 +312,10 @@ const Rooms = {
    * @returns {{ success: boolean, message: string }}
    */
   updateBuilding: function(id, patchObj) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.' };
+    }
+
     const existing = this.getBuildingById(id);
     if (!existing) return { success: false, message: 'Building not found.' };
 
@@ -316,6 +340,10 @@ const Rooms = {
    * @returns {{ success: boolean, message: string }}
    */
   deleteBuilding: function(id) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.' };
+    }
+
     const bldg = this.getBuildingById(id);
     if (!bldg) return { success: false, message: 'Building not found.' };
 

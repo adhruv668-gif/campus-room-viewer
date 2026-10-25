@@ -293,6 +293,10 @@ const Bookings = {
    * @returns {{ success: boolean, message: string, rejectedConflicts: object[] }}
    */
   approveBooking: function(id) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.', rejectedConflicts: [] };
+    }
+
     const booking = this.getById(id);
     if (!booking || booking.status !== Config.BOOKING_STATUS.PENDING) {
       return { success: false, message: 'Invalid or non-pending booking.', rejectedConflicts: [] };
@@ -368,6 +372,10 @@ const Bookings = {
    * @returns {{ success: boolean, message: string }}
    */
   rejectBooking: function(id, adminRemark) {
+    if (typeof App !== 'undefined' && App.getCurrentRole && App.getCurrentRole() !== Config.ROLES.ADMIN) {
+      return { success: false, message: 'Unauthorized: Room Coordinator access required.' };
+    }
+
     const booking = this.getById(id);
     if (!booking) return { success: false, message: 'Booking not found.' };
 
@@ -1115,6 +1123,17 @@ const Bookings = {
         return;
       }
 
+      // Check if requested slot has already begun on the current day
+      if (date === Utils.getLocalDateString(Utils.getNow())) {
+        const slotDef = Config.SLOTS.find(function(s) { return s.id === startSlot; });
+        const now = Utils.getNow();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        if (slotDef && nowMinutes >= (slotDef.startHour * 60 + slotDef.startMin)) {
+          liveBox.innerHTML = `<span style="color: var(--color-danger);">&#10060; <strong>Slot Elapsed:</strong> Slot ${startSlot} (${slotDef.start} - ${slotDef.end}) has already started or passed today. Select an upcoming slot.</span>`;
+          return;
+        }
+      }
+
       const conflicts = Availability.findConflicts(roomId, date, startSlot, endSlot, editBookingId || '');
       const hard = conflicts.filter(function(c) { return c.type === 'maintenance' || c.type === 'class' || c.type === 'approved'; });
       const soft = conflicts.filter(function(c) { return c.type === 'pending'; });
@@ -1128,13 +1147,44 @@ const Bookings = {
       }
     }, 200);
 
+    const updateSlotOptionStates = function() {
+      const dateEl = document.getElementById('req-date');
+      const startEl = document.getElementById('req-start-slot');
+      const endEl = document.getElementById('req-end-slot');
+      if (!dateEl || !startEl || !endEl) return;
+
+      const isToday = dateEl.value === Utils.getLocalDateString(Utils.getNow());
+      const now = Utils.getNow();
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      [startEl, endEl].forEach(function(select) {
+        Array.from(select.options).forEach(function(opt) {
+          const slotId = parseInt(opt.value, 10);
+          const slot = Config.SLOTS.find(function(s) { return s.id === slotId; });
+          if (isToday && slot && nowMinutes >= (slot.startHour * 60 + slot.startMin)) {
+            opt.disabled = true;
+            opt.textContent = `${slot.label} (${select === endEl ? slot.end : slot.start}) [Passed]`;
+          } else if (slot) {
+            opt.disabled = false;
+            opt.textContent = `${slot.label} (${select === endEl ? slot.end : slot.start})`;
+          }
+        });
+      });
+    };
+
     if (roomSelect) roomSelect.addEventListener('change', updateLiveSlotCheck);
     const dateInputEl = document.getElementById('req-date');
-    if (dateInputEl) dateInputEl.addEventListener('change', updateLiveSlotCheck);
+    if (dateInputEl) {
+      dateInputEl.addEventListener('change', function() {
+        updateSlotOptionStates();
+        updateLiveSlotCheck();
+      });
+    }
     const startSlotEl = document.getElementById('req-start-slot');
     if (startSlotEl) startSlotEl.addEventListener('change', updateLiveSlotCheck);
     const endSlotEl = document.getElementById('req-end-slot');
     if (endSlotEl) endSlotEl.addEventListener('change', updateLiveSlotCheck);
+    updateSlotOptionStates();
     updateLiveSlotCheck();
 
     // Submit handler

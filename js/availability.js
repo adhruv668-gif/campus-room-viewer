@@ -533,13 +533,25 @@ const Availability = {
       window.print();
     });
 
-    // Cell click delegation for slot inspector
+    // Cell click and keyboard delegation for slot inspector
     containerEl.addEventListener('click', function(e) {
       const cell = e.target.closest('.grid-cell');
       if (cell) {
         const roomId = cell.getAttribute('data-room-id');
         const slot = parseInt(cell.getAttribute('data-slot'), 10);
         self.renderSlotDetails(roomId, activeFilters.date, slot);
+      }
+    });
+
+    containerEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const cell = e.target.closest('.grid-cell');
+        if (cell) {
+          e.preventDefault();
+          const roomId = cell.getAttribute('data-room-id');
+          const slot = parseInt(cell.getAttribute('data-slot'), 10);
+          self.renderSlotDetails(roomId, activeFilters.date, slot);
+        }
       }
     });
   },
@@ -583,8 +595,11 @@ const Availability = {
             Maintenance: '&#128295;'
           };
 
+          const slotTime = Utils.formatSlotTime(s);
+          const bookingPrompt = (statusInfo.status === 'Free' && !statusInfo.isPast) ? ' - Click or press enter to book' : '';
+
           cellTds += `
-            <td class="grid-cell ${cellClass}" data-room-id="${Utils.escapeHTML(room.id)}" data-slot="${s}" tabindex="0" role="button" aria-label="Room ${Utils.escapeHTML(room.roomNo)}, Slot ${s}, ${Utils.escapeHTML(statusInfo.status)}">
+            <td class="grid-cell ${cellClass}" data-room-id="${Utils.escapeHTML(room.id)}" data-slot="${s}" tabindex="0" role="button" aria-label="Room ${Utils.escapeHTML(room.roomNo)}, ${slotTime}, ${Utils.escapeHTML(statusInfo.status)}${bookingPrompt}">
               <div class="grid-cell-content">
                 <span class="grid-cell-icon" aria-hidden="true">${iconMap[statusInfo.status] || ''}</span>
                 <span class="grid-cell-label">${Utils.escapeHTML(statusInfo.status)}</span>
