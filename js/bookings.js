@@ -522,8 +522,7 @@ const Bookings = {
           Completed: 'badge-free'
         };
 
-        const timeSpan = `${Utils.formatSlotTime(b.startSlot)}` +
-          (b.endSlot > b.startSlot ? ` to ${Utils.formatSlotTime(b.endSlot).split('-')[1]}` : '');
+        const timeSpan = Utils.formatSlotRange(b.startSlot, b.endSlot);
 
         const isOwner = (b.requesterId.toUpperCase() === (lastRequester.id || '').toUpperCase());
         const canEdit = isOwner && (computed === 'Pending');
@@ -837,7 +836,7 @@ const Bookings = {
       <div style="display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3);">
         <p><strong>Reference:</strong> <code>${Utils.escapeHTML(b.ref)}</code></p>
         <p><strong>Room:</strong> ${Utils.escapeHTML(roomName)}</p>
-        <p><strong>Date &amp; Time:</strong> ${Utils.formatDate(b.date)} &bull; ${Utils.formatSlotTime(b.startSlot)} to ${Utils.formatSlotTime(b.endSlot)}</p>
+        <p><strong>Date &amp; Time:</strong> ${Utils.formatDate(b.date)} &bull; ${Utils.formatSlotRange(b.startSlot, b.endSlot)}</p>
         <p><strong>Requester:</strong> ${Utils.escapeHTML(b.requesterName)} (${Utils.escapeHTML(b.requesterType)} &bull; ${Utils.escapeHTML(b.requesterId)})</p>
         ${isAdmin ? `<p><strong>Contact:</strong> ${Utils.escapeHTML(b.email)} ${b.phone ? '&bull; ' + Utils.escapeHTML(b.phone) : ''}</p>` : ''}
         <p><strong>Attendees:</strong> ${Utils.escapeHTML(String(b.attendees))} persons</p>

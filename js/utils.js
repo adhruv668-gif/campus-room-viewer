@@ -129,6 +129,24 @@ const Utils = {
   },
 
   /**
+   * Formats a slot range into readable time span (e.g. "11:00 - 13:00 (Slots 3-4)").
+   * @param {number} startSlot - 1 to 9
+   * @param {number} endSlot - 1 to 9
+   * @returns {string}
+   */
+  formatSlotRange: function(startSlot, endSlot) {
+    const sDef = Config.SLOTS.find(function(s) { return s.id === startSlot; });
+    const eDef = Config.SLOTS.find(function(s) { return s.id === endSlot; });
+    if (!sDef || !eDef) {
+      return `Slots ${startSlot}-${endSlot}`;
+    }
+    if (startSlot === endSlot) {
+      return `${sDef.start} - ${sDef.end} (Slot ${startSlot})`;
+    }
+    return `${sDef.start} - ${eDef.end} (Slots ${startSlot}-${endSlot})`;
+  },
+
+  /**
    * Identifies which slot (1-9) is currently active based on current time.
    * Returns null if outside 09:00-18:00 or on Sunday.
    * @returns {number|null}

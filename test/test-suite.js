@@ -251,6 +251,12 @@ runTest('Slot validation: Same-day booking rejects slot that has already started
   Store.set('SETTINGS', {});
 });
 
+runTest('Utils.formatSlotRange(): Formats single slot and multi-slot spans correctly', () => {
+  assert.strictEqual(Utils.formatSlotRange(1, 1), '09:00 - 10:00 (Slot 1)');
+  assert.strictEqual(Utils.formatSlotRange(3, 4), '11:00 - 13:00 (Slots 3-4)');
+  assert.strictEqual(Utils.formatSlotRange(1, 4), '09:00 - 13:00 (Slots 1-4)');
+});
+
 
 // ----------------------------------------------------
 // 2. CONFLICT DETECTION TESTS
