@@ -182,20 +182,31 @@ const Store = {
   },
 
   /**
+   * Returns whether persistent localStorage is currently available.
+   * @returns {boolean}
+   */
+  isStorageAvailable: function() {
+    return this._isStorageAvailable;
+  },
+
+  /**
    * Resets all collections back to the deterministic sample data from Seed.
+   * @returns {boolean} - True if persisted to storage, false if in-memory fallback.
    */
   resetToSample: function() {
     if (typeof Seed === 'undefined' || !Seed.generateSampleData) {
-      return;
+      return false;
     }
 
     const sample = Seed.generateSampleData();
-    this.set('BUILDINGS', sample.buildings);
-    this.set('ROOMS', sample.rooms);
-    this.set('TIMETABLE', sample.timetable);
-    this.set('BOOKINGS', sample.bookings);
-    this.set('SETTINGS', sample.settings);
-    this.set('SCHEMA_VERSION', Config.SCHEMA_VERSION);
+    const w1 = this.set('BUILDINGS', sample.buildings);
+    const w2 = this.set('ROOMS', sample.rooms);
+    const w3 = this.set('TIMETABLE', sample.timetable);
+    const w4 = this.set('BOOKINGS', sample.bookings);
+    const w5 = this.set('SETTINGS', sample.settings);
+    const w6 = this.set('SCHEMA_VERSION', Config.SCHEMA_VERSION);
+
+    return Boolean(w1 && w2 && w3 && w4 && w5 && w6);
   },
 
   /**
@@ -217,33 +228,91 @@ const Store = {
 
   /**
    * Validates and restores collections from an imported JSON backup string.
+   * Performs staged commit with atomic rollback on validation or write failure.
    * @param {string} jsonString
    * @returns {{ success: boolean, message: string }}
    */
   importBackup: function(jsonString) {
+    let data;
     try {
-      const data = JSON.parse(jsonString);
-
-      if (!data || typeof data !== 'object') {
-        return { success: false, message: 'Invalid backup file: Not a valid JSON object.' };
-      }
-
-      if (!Array.isArray(data.buildings) || !Array.isArray(data.rooms) || !Array.isArray(data.timetable) || !Array.isArray(data.bookings)) {
-        return { success: false, message: 'Invalid backup schema: Missing required collections.' };
-      }
-
-      this.set('BUILDINGS', data.buildings);
-      this.set('ROOMS', data.rooms);
-      this.set('TIMETABLE', data.timetable);
-      this.set('BOOKINGS', data.bookings);
-      if (data.settings && typeof data.settings === 'object') {
-        this.set('SETTINGS', data.settings);
-      }
-      this.set('SCHEMA_VERSION', Config.SCHEMA_VERSION);
-
-      return { success: true, message: 'Backup successfully restored.' };
+      data = JSON.parse(jsonString);
     } catch (e) {
       return { success: false, message: 'Corrupted JSON: ' + e.message };
     }
+
+    if (!data || typeof data !== 'object') {
+      return { success: false, message: 'Invalid backup file: Root must be a JSON object.' };
+    }
+
+    // 1. Comprehensive Schema Validation before modifying existing state
+    if (!Array.isArray(data.buildings) || !Array.isArray(data.rooms) ||
+        !Array.isArray(data.timetable) || !Array.isArray(data.bookings)) {
+      return { success: false, message: 'Invalid backup schema: Missing required collections.' };
+    }
+
+    const invalidBldg = data.buildings.some(function(b) {
+      return !b || typeof b !== 'object' || !b.id || !b.code || !b.name;
+    });
+    if (invalidBldg) {
+      return { success: false, message: 'Invalid backup schema: Corrupted building records.' };
+    }
+
+    const invalidRoom = data.rooms.some(function(r) {
+      return !r || typeof r !== 'object' || !r.id || !r.buildingId || !r.roomNo || !r.name;
+    });
+    if (invalidRoom) {
+      return { success: false, message: 'Invalid backup schema: Corrupted room records.' };
+    }
+
+    const invalidTimetable = data.timetable.some(function(t) {
+      return !t || typeof t !== 'object' || !t.id || !t.roomId || typeof t.weekday !== 'number' || typeof t.slot !== 'number';
+    });
+    if (invalidTimetable) {
+      return { success: false, message: 'Invalid backup schema: Corrupted timetable entries.' };
+    }
+
+    const invalidBooking = data.bookings.some(function(b) {
+      return !b || typeof b !== 'object' || !b.id || !b.ref || !b.roomId || !b.date || !b.status;
+    });
+    if (invalidBooking) {
+      return { success: false, message: 'Invalid backup schema: Corrupted booking records.' };
+    }
+
+    // 2. Snapshot current state for rollback protection
+    const snapshot = {
+      BUILDINGS: this.get('BUILDINGS'),
+      ROOMS: this.get('ROOMS'),
+      TIMETABLE: this.get('TIMETABLE'),
+      BOOKINGS: this.get('BOOKINGS'),
+      SETTINGS: this.get('SETTINGS'),
+      SCHEMA_VERSION: this.get('SCHEMA_VERSION')
+    };
+
+    // 3. Staged commit
+    const wBldgs = this.set('BUILDINGS', data.buildings);
+    const wRooms = this.set('ROOMS', data.rooms);
+    const wTimetable = this.set('TIMETABLE', data.timetable);
+    const wBookings = this.set('BOOKINGS', data.bookings);
+    let wSettings = true;
+    if (data.settings && typeof data.settings === 'object') {
+      wSettings = this.set('SETTINGS', data.settings);
+    }
+    const wVersion = this.set('SCHEMA_VERSION', Config.SCHEMA_VERSION);
+
+    // 4. Verify all writes succeeded; rollback if any failed
+    if (!wBldgs || !wRooms || !wTimetable || !wBookings || !wSettings || !wVersion) {
+      this.set('BUILDINGS', snapshot.BUILDINGS);
+      this.set('ROOMS', snapshot.ROOMS);
+      this.set('TIMETABLE', snapshot.TIMETABLE);
+      this.set('BOOKINGS', snapshot.BOOKINGS);
+      this.set('SETTINGS', snapshot.SETTINGS);
+      this.set('SCHEMA_VERSION', snapshot.SCHEMA_VERSION);
+      return {
+        success: false,
+        message: 'Storage write failed during restore. Restored previous application state.'
+      };
+    }
+
+    return { success: true, message: 'Backup successfully restored.' };
   }
 };

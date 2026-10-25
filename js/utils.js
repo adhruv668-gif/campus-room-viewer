@@ -54,7 +54,7 @@ const Utils = {
    * @returns {string}
    */
   getLocalDateString: function(dateObj) {
-    if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
+    if (!dateObj || typeof dateObj.getFullYear !== 'function' || isNaN(dateObj.getTime())) {
       dateObj = this.getNow();
     }
     const year = dateObj.getFullYear();

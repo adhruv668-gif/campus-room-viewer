@@ -137,11 +137,19 @@ const Rooms = {
 
     // Remove associated timetable classes
     const timetable = Store.get('TIMETABLE') || [];
+    const prevTimetable = JSON.parse(JSON.stringify(timetable));
     const filteredTt = timetable.filter(function(t) { return t.roomId !== id; });
-    const ttSaved = Store.set('TIMETABLE', filteredTt);
+
+    const prevRooms = Store.get('ROOMS') || [];
     const rmSaved = Store.removeItem('ROOMS', id);
-    if (!ttSaved || !rmSaved) {
+    if (!rmSaved) {
       return { success: false, message: 'Storage write failed. Room could not be deleted.' };
+    }
+
+    const ttSaved = Store.set('TIMETABLE', filteredTt);
+    if (!ttSaved) {
+      Store.set('ROOMS', prevRooms);
+      return { success: false, message: 'Storage write failed. Could not clean timetable entries.' };
     }
 
     return { success: true, message: `Room ${room.roomNo} and its timetable entries have been removed.` };
@@ -150,6 +158,7 @@ const Rooms = {
   /**
    * Toggles maintenance status. Auto-cancels future Pending and Approved bookings if set to Maintenance.
    * Does NOT cancel bookings whose slot has already ended earlier today.
+   * Staged with rollback if room status update fails.
    * @param {string} roomId
    * @returns {{ success: boolean, message: string, affectedBookings: number }}
    */
@@ -162,15 +171,16 @@ const Rooms = {
       Config.ROOM_STATUS.ACTIVE;
 
     let affectedCount = 0;
+    const currentBookings = Store.get('BOOKINGS') || [];
+    const prevBookingsSnapshot = JSON.parse(JSON.stringify(currentBookings));
 
     if (newStatus === Config.ROOM_STATUS.MAINTENANCE) {
       const now = Utils.getNow();
       const todayStr = Utils.getLocalDateString(now);
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
-      const bookings = Store.get('BOOKINGS') || [];
       const nowIso = now.toISOString();
 
-      bookings.forEach(function(b) {
+      currentBookings.forEach(function(b) {
         if (b.roomId === roomId && b.date >= todayStr && (b.status === Config.BOOKING_STATUS.PENDING || b.status === Config.BOOKING_STATUS.APPROVED)) {
           // If the booking is today, do not cancel if its slot has already ended earlier today
           if (b.date === todayStr) {
@@ -197,7 +207,7 @@ const Rooms = {
       });
 
       if (affectedCount > 0) {
-        const bSaved = Store.set('BOOKINGS', bookings);
+        const bSaved = Store.set('BOOKINGS', currentBookings);
         if (!bSaved) {
           return {
             success: false,
@@ -208,9 +218,14 @@ const Rooms = {
       }
     }
 
+    const prevRoomStatus = room.status;
     room.status = newStatus;
     const rSaved = Store.updateItem('ROOMS', roomId, room);
     if (!rSaved) {
+      if (affectedCount > 0) {
+        Store.set('BOOKINGS', prevBookingsSnapshot);
+      }
+      room.status = prevRoomStatus;
       return {
         success: false,
         message: 'Storage write failed. Could not update room status.',
@@ -392,7 +407,7 @@ const Rooms = {
           <td data-label="Room No">${Utils.escapeHTML(room.roomNo)}</td>
           <td data-label="Name">${Utils.escapeHTML(room.name)}</td>
           <td data-label="Type"><span class="chip">${Utils.escapeHTML(room.type)}</span></td>
-          <td data-label="Capacity">${room.capacity} seats</td>
+          <td data-label="Capacity">${Utils.escapeHTML(String(room.capacity))} seats</td>
           <td data-label="Status">
             <span class="badge ${isMaint ? 'badge-maint' : 'badge-free'}">
               ${isMaint ? '&#128295; Maintenance' : '&#9989; Active'}
@@ -400,11 +415,11 @@ const Rooms = {
           </td>
           <td data-label="Actions" style="text-align: right;">
             <div style="display: inline-flex; gap: 4px;">
-              <button class="btn btn-sm btn-secondary room-edit-btn" data-id="${room.id}" type="button">Edit</button>
-              <button class="btn btn-sm ${isMaint ? 'btn-accent' : 'btn-subtle'} room-maint-btn" data-id="${room.id}" type="button">
+              <button class="btn btn-sm btn-secondary room-edit-btn" data-id="${Utils.escapeHTML(room.id)}" type="button">Edit</button>
+              <button class="btn btn-sm ${isMaint ? 'btn-accent' : 'btn-subtle'} room-maint-btn" data-id="${Utils.escapeHTML(room.id)}" type="button">
                 ${isMaint ? 'Activate' : 'Maint.'}
               </button>
-              <button class="btn btn-sm btn-danger room-del-btn" data-id="${room.id}" type="button">Delete</button>
+              <button class="btn btn-sm btn-danger room-del-btn" data-id="${Utils.escapeHTML(room.id)}" type="button">Delete</button>
             </div>
           </td>
         </tr>
@@ -547,7 +562,7 @@ const Rooms = {
           </div>
           <div class="form-group">
             <label for="room-f-floor" class="form-label form-label-required">Floor (0-20)</label>
-            <input type="number" id="room-f-floor" class="form-input" min="0" max="20" value="${room.floor}" required />
+            <input type="number" id="room-f-floor" class="form-input" min="0" max="20" value="${Utils.escapeHTML(String(room.floor))}" required />
           </div>
         </div>
         <div class="form-group">
@@ -561,7 +576,7 @@ const Rooms = {
           </div>
           <div class="form-group">
             <label for="room-f-capacity" class="form-label form-label-required">Capacity (Seats)</label>
-            <input type="number" id="room-f-capacity" class="form-input" min="1" max="500" value="${room.capacity}" required />
+            <input type="number" id="room-f-capacity" class="form-input" min="1" max="500" value="${Utils.escapeHTML(String(room.capacity))}" required />
           </div>
         </div>
         <div class="form-group">
@@ -583,7 +598,7 @@ const Rooms = {
     `;
 
     const self = this;
-    UI.showModal(isEdit ? `Edit Room ${room.roomNo}` : 'Add New Campus Room', modalBody, function() {
+    UI.showModal(isEdit ? `Edit Room ${Utils.escapeHTML(room.roomNo)}` : 'Add New Campus Room', modalBody, function() {
       const bldgId = document.getElementById('room-f-bldg').value;
       const roomNo = document.getElementById('room-f-no').value;
       const floor = document.getElementById('room-f-floor').value;
@@ -726,13 +741,13 @@ const Rooms = {
         </div>
         <div class="form-group">
           <label for="bldg-f-floors" class="form-label form-label-required">Total Floors (1-20)</label>
-          <input type="number" id="bldg-f-floors" class="form-input" min="1" max="20" value="${bldg.floors}" required />
+          <input type="number" id="bldg-f-floors" class="form-input" min="1" max="20" value="${Utils.escapeHTML(String(bldg.floors))}" required />
         </div>
       </form>
     `;
 
     const self = this;
-    UI.showModal(isEdit ? `Edit Building ${bldg.code}` : 'Add Campus Building', modalBody, function() {
+    UI.showModal(isEdit ? `Edit Building ${Utils.escapeHTML(bldg.code)}` : 'Add Campus Building', modalBody, function() {
       const code = document.getElementById('bldg-f-code').value;
       const name = document.getElementById('bldg-f-name').value;
       const floors = document.getElementById('bldg-f-floors').value;
@@ -761,7 +776,7 @@ const Rooms = {
 
     let roomOptions = '<option value="">All Rooms</option>';
     rooms.forEach(function(r) {
-      roomOptions += `<option value="${r.id}">${Utils.escapeHTML(r.name)} (${r.roomNo})</option>`;
+      roomOptions += `<option value="${r.id}">${Utils.escapeHTML(r.name)} (${Utils.escapeHTML(r.roomNo)})</option>`;
     });
 
     containerEl.innerHTML = `
@@ -880,7 +895,7 @@ const Rooms = {
       addBtn.addEventListener('click', function() {
         let rOpts = '';
         rooms.forEach(function(r) {
-          rOpts += `<option value="${r.id}">${Utils.escapeHTML(r.name)} (${r.roomNo})</option>`;
+          rOpts += `<option value="${r.id}">${Utils.escapeHTML(r.name)} (${Utils.escapeHTML(r.roomNo)})</option>`;
         });
 
         const modalBody = `
@@ -1063,8 +1078,12 @@ const Rooms = {
       }
       const s = Store.get('SETTINGS') || {};
       s.adminPin = pin;
-      Store.set('SETTINGS', s);
-      UI.showToast('Admin PIN updated successfully.', 'success');
+      const saved = Store.set('SETTINGS', s);
+      if (saved) {
+        UI.showToast('Admin PIN updated successfully.', 'success');
+      } else {
+        UI.showToast('Storage write failed. Admin PIN updated in memory for this session only.', 'warning');
+      }
     });
 
     // Export Backup

@@ -79,7 +79,7 @@ getSlotStatus: function(roomId, dateStr, slotNumber) {
    A **Hard Conflict** occurs when a requested slot collides with a scheduled timetable lecture, an approved reservation, or a room under maintenance. Hard conflicts strictly block form submission. A **Soft Conflict** occurs when one or more pending booking requests exist for the same slot; the user receives an advisory notice, and the request is permitted to enter administrative review.
 
 5. **What happens during an administrative approval cascade?**  
-   In `Bookings.approveBooking()`, once a booking is marked `Approved`, the system queries all other pending requests for that same room and date whose slots overlap $(s1 \le e2) \land (s2 \le e1)$. All competing requests are automatically updated to `Rejected` with an audit remark citing the approved reference ID.
+   In `Bookings.approveBooking()`, once a booking is selected for approval, the system prepares an atomic batch commit: it clones the `BOOKINGS` collection in memory, marks the target booking as `Approved`, and queries all other pending requests for the same room and date whose slots overlap $(s1 \le e2) \land (s2 \le e1)$. All competing requests are updated to `Rejected` with an audit remark citing the approved reference ID. Finally, the entire updated collection is committed in a single `Store.set('BOOKINGS', clonedBookings)` call. If storage persistence fails, no partial mutations persist, and an accurate failure status is returned.
 
 6. **Why are bookings from earlier today excluded from the active upcoming quota?**  
    In `Bookings.createBooking()`, the quota counter filters active bookings for a user. If a booking was scheduled for today but its ending slot has already passed (`nowMinutes >= slotEndMinutes`), it has finished its operational lifecycle. Counting ended slots against a student's 3-request quota would unfairly block them from booking upcoming slots later in the week.
@@ -88,10 +88,10 @@ getSlotStatus: function(roomId, dateStr, slotNumber) {
    When toggling a room into maintenance mode, the system auto-cancels future bookings. However, for bookings scheduled earlier today whose slot end time has already elapsed (`nowMinutes >= slotEndMinutes`), the cancellation is skipped. This preserves historical records and prevents retroactively cancelling completed campus sessions.
 
 8. **What happens when `localStorage.setItem()` throws a `QuotaExceededError` or is disabled in private browsing?**  
-   In `Store.set()`, writes are wrapped in a `try...catch` block. If `setItem` throws, the system flags `Store._isStorageAvailable = false`, keeps the data updated in its internal in-memory cache (`Store._memoryCache`), and returns `false`. This prevents unhandled exceptions from crashing the application.
+   In `Store.set()`, writes are wrapped in a `try...catch` block. If `setItem` throws, the system flags `Store._isStorageAvailable = false`, keeps the data updated in its internal in-memory cache (`Store._memoryCache`), and returns `false`. The UI surfaces a persistent warning banner indicating session-only memory operation so the user understands changes will not persist across browser reloads.
 
 9. **Why does `Store.get()` check `Store._isStorageAvailable` before reading from `localStorage`?**  
-   If a storage write has previously failed, `Store._memoryCache` holds the most up-to-date state. If `Store.get()` blindly read from `localStorage`, it would return stale data and clobber recent in-memory changes.
+   If a storage write has previously failed or storage is blocked, `Store._memoryCache` holds the most up-to-date state. If `Store.get()` blindly read from `localStorage`, it would either throw or return stale data, clobbering recent in-memory changes.
 
 10. **How does the application prevent Cross-Site Scripting (XSS) in confirmation dialogs?**  
     In `Utils.escapeHTML()`, special HTML characters (`&`, `<`, `>`, `"`, `'`) are converted to their respective HTML entities. All user-controlled fields—such as room numbers, building names, booking references, and requester names—are sanitized before insertion into template literals or `UI.showModal()` HTML strings.
@@ -126,7 +126,7 @@ getSlotStatus: function(roomId, dateStr, slotNumber) {
     `UI.applyTheme()` sets the `data-theme` attribute on the root `<html>` element (`<html data-theme="dark">`). In `css/base.css`, all colors are defined as CSS custom properties (`--bg-primary`, `--text-primary`, `--border-color`). Changing the root attribute instantly updates all rendered components without DOM rebuilding.
 
 19. **How does `Store.init()` handle schema version migrations?**  
-    `Config.STORAGE_KEYS.VERSION` stores `CAMPUS_ROOMS_SCHEMA_VERSION = 'v1.1'`. When the app boots, `Store.init()` compares the stored version against the config version. If a mismatch is detected, it clears outdated keys and re-seeds the dataset to prevent corrupted data structures.
+    `Config.STORAGE_KEYS.SCHEMA_VERSION` stores `'campus_rooms_schema_version'`, and `Config.SCHEMA_VERSION` is defined as `'1.0'`. When the app boots, `Store.init()` reads the stored schema version. If missing or mismatched with `Config.SCHEMA_VERSION`, it clears outdated application keys and loads the fresh seed dataset, ensuring data integrity across updates.
 
 20. **Why does the application use global event delegation instead of attaching listeners to every button?**  
     Dynamic views (e.g. timetable grids, room lists) frequently re-render when filters change. Attaching individual event listeners to hundreds of grid cells creates memory leaks and requires tedious re-binding. Event delegation listens on a common parent container and inspects `event.target.closest('[data-action]')`.
@@ -135,7 +135,7 @@ getSlotStatus: function(roomId, dateStr, slotNumber) {
     Typing triggers the `input` event on every keystroke. Debouncing delays the execution of the filter logic by 250 milliseconds until the user stops typing, eliminating UI lag and unnecessary DOM recalculations.
 
 22. **How are real-time dashboard KPIs calculated in `Dashboard.getMetrics()`?**  
-    `Dashboard.getMetrics()` iterates over the 28 rooms and checks their current status for today's active slot (determined by current time). It aggregates total rooms, rooms under maintenance, occupied rooms (classes + approved bookings), and calculates the real-time occupancy percentage: $(\text{Occupied} / \text{Total Active}) \times 100$.
+    `Dashboard.getMetrics()` evaluates the campus state against the active client-side clock (or simulated time offset). It iterates over all active rooms, evaluates their occupancy for today's current slot (determined by time bounds), counts free rooms, maintenance rooms, and computes the occupancy percentage: $(\text{Occupied} / \text{Total Active}) \times 100$. This is calculated purely in the browser from local sample data rather than live hardware IoT sensors.
 
 23. **How are the dashboard occupancy charts generated without third-party chart libraries?**  
     Charts are built using pure CSS. Building occupancy and slot utilization bars use CSS Flexbox with inline style percentage widths (`width: ${pct}%`). The overall status distribution donut chart uses a pure CSS `conic-gradient()` background with an inner circle cutout.
@@ -147,7 +147,7 @@ getSlotStatus: function(roomId, dateStr, slotNumber) {
     `Rooms.deleteBuilding()` queries the rooms list to check if any rooms reference the target `buildingId`. If matching rooms exist, deletion is blocked, requiring the administrator to delete or reassign all rooms in that block first.
 
 26. **How does the simulated clock in settings work?**  
-    `Utils.getNow()` inspects `sessionStorage` for a simulated time offset. If an evaluator sets the simulated clock to Wednesday 14:00, all availability calculations, slot status checks, and past-slot validations evaluate against that timestamp rather than the device's system time.
+    `Utils.getNow()` inspects `localStorage` under `Config.STORAGE_KEYS.SETTINGS` for a `simulatedNow` property (format `YYYY-MM-DDTHH:MM`). If set, `Utils.getNow()` returns a `Date` object corresponding to that timestamp. All availability checks, past-slot validations, and timetable views instantly evaluate against this simulated time. The simulation can be reset to real system time at any time via the top banner button or the settings panel.
 
 27. **Why does `Validators.validateRejectRemark()` enforce a minimum length of 5 characters?**  
     When an admin rejects a booking, the applicant receives the rejection remark. Enforcing a 5-to-200 character requirement prevents administrators from submitting blank or single-character dismissal notes (e.g. "." or "x") without a valid reason.
@@ -156,10 +156,10 @@ getSlotStatus: function(roomId, dateStr, slotNumber) {
     In `Validators.validateSlots()`, if `dateStr === todayStr`, the function looks up the slot's closing time (`endHour * 60 + endMin`). If the current time in minutes exceeds the slot's end time, validation fails with an explicit error: `"Slot X has already ended today. Select a future slot."`
 
 29. **How are booking reference codes generated and structured?**  
-    In `Bookings._generateRef()`, references follow the pattern `BK-YYYYMMDD-XXXX`, where `YYYYMMDD` is the local date and `XXXX` is a 4-character random hexadecimal token (e.g. `BK-20261024-A3F9`). This ensures human-readable, unique identifiers.
+    In `Utils.generateRef(dateString)`, references follow the pattern `RB-YYYYMMDD-NNN`, where `YYYYMMDD` is the sanitized date string (digits only) and `NNN` is a 3-digit random integer between 100 and 999 (e.g. `RB-20261024-482`). This creates consistent, human-readable reference tokens.
 
-30. **How does the application maintain WCAG AA accessibility compliance?**  
-    All foreground and background color combinations achieve at least a 4.5:1 contrast ratio for normal text. All interactive elements have visible `:focus-visible` focus outlines, semantic ARIA landmarks (`<header>`, `<nav>`, `<main>`, `<dialog>`), and labels on all form inputs.
+30. **How does the application address accessibility (a11y) standards?**  
+    The academic project implementation targets core WCAG 2.1 Level AA recommendations: contrast ratios meet or exceed 4.5:1 for normal text across both light and dark themes, all interactive buttons and inputs have visible `:focus-visible` keyboard focus rings, semantic landmark elements (`<header>`, `<nav>`, `<main>`, `<dialog>`) are used throughout, form inputs have explicit `<label>` bindings, and timetable grid cells provide descriptive `aria-label` strings.
 
 31. **Is the 4-digit admin PIN (`1234`) secure against inspection?**  
     No. In any client-side single-page application without a backend server, all JavaScript source code, validation logic, and storage data reside in the user's browser. The PIN serves solely as a role simulation demonstration for academic presentation.

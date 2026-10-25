@@ -24,6 +24,14 @@
     </div>
   </aside>
 
+  <!-- Storage Fallback Warning Banner (Active when localStorage is unavailable or throws) -->
+  <aside id="storage-banner" class="sim-banner storage-warning-banner hidden" role="alert" aria-live="polite">
+    <div class="sim-banner-content">
+      <span class="sim-banner-icon" aria-hidden="true">&#9888;</span>
+      <span id="storage-banner-text">Persistent storage is unavailable. Running in session-only memory mode (changes will not persist across browser reloads).</span>
+    </div>
+  </aside>
+
   <!-- Sticky Application Header -->
   <header class="site-header" role="banner">
     <div class="header-container">

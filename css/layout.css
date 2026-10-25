@@ -236,6 +236,12 @@
   font-weight: var(--font-medium);
 }
 
+.storage-warning-banner {
+  background-color: var(--color-maint-bg);
+  border-bottom: 1px solid var(--color-maint-border);
+  color: var(--color-maint);
+}
+
 .sim-banner-content {
   max-width: 1200px;
   margin: 0 auto;

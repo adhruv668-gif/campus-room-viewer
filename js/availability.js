@@ -560,10 +560,10 @@ const Availability = {
           };
 
           cellTds += `
-            <td class="grid-cell ${cellClass}" data-room-id="${room.id}" data-slot="${s}" tabindex="0" role="button" aria-label="Room ${room.roomNo}, Slot ${s}, ${statusInfo.status}">
+            <td class="grid-cell ${cellClass}" data-room-id="${Utils.escapeHTML(room.id)}" data-slot="${s}" tabindex="0" role="button" aria-label="Room ${Utils.escapeHTML(room.roomNo)}, Slot ${s}, ${Utils.escapeHTML(statusInfo.status)}">
               <div class="grid-cell-content">
                 <span class="grid-cell-icon" aria-hidden="true">${iconMap[statusInfo.status] || ''}</span>
-                <span class="grid-cell-label">${statusInfo.status}</span>
+                <span class="grid-cell-label">${Utils.escapeHTML(statusInfo.status)}</span>
               </div>
             </td>
           `;
@@ -574,7 +574,7 @@ const Availability = {
             <td class="grid-col-room">
               <strong>${Utils.escapeHTML(room.roomNo)}</strong> &bull; ${Utils.escapeHTML(room.name)}
               <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">
-                ${room.type} &bull; ${room.capacity} seats
+                ${Utils.escapeHTML(room.type)} &bull; ${Utils.escapeHTML(String(room.capacity))} seats
               </div>
             </td>
             ${cellTds}
@@ -653,19 +653,19 @@ const Availability = {
                 <h3 style="margin: 0;">Room ${Utils.escapeHTML(room.roomNo)}</h3>
                 <p class="form-hint" style="margin: 0;">${Utils.escapeHTML(room.name)}</p>
               </div>
-              <span class="badge ${room.status === 'Active' ? 'badge-free' : 'badge-maint'}">${room.status}</span>
+              <span class="badge ${room.status === 'Active' ? 'badge-free' : 'badge-maint'}">${Utils.escapeHTML(room.status)}</span>
             </div>
 
             <div style="margin-top: var(--space-2); display: flex; gap: var(--space-2); flex-wrap: wrap;">
-              <span class="chip">${room.type}</span>
-              <span class="chip">&#128101; ${room.capacity} seats</span>
-              <span class="chip">&#9200; ${nextFreeText}</span>
+              <span class="chip">${Utils.escapeHTML(room.type)}</span>
+              <span class="chip">&#128101; ${Utils.escapeHTML(String(room.capacity))} seats</span>
+              <span class="chip">&#9200; ${Utils.escapeHTML(nextFreeText)}</span>
             </div>
 
             ${stripHtml}
 
             <div style="margin-top: var(--space-2); font-size: var(--text-xs); color: var(--text-secondary);">
-              <strong>Facilities:</strong> ${(room.facilities || []).join(', ') || 'Standard room'}
+              <strong>Facilities:</strong> ${(room.facilities || []).map(function(f) { return Utils.escapeHTML(f); }).join(', ') || 'Standard room'}
             </div>
           </div>
 
@@ -717,7 +717,7 @@ const Availability = {
           <h4 style="margin-bottom: var(--space-1);">&#128100; Approved Campus Booking</h4>
           <p><strong>Reference:</strong> <code>${Utils.escapeHTML(bk.ref)}</code></p>
           <p><strong>Purpose:</strong> ${Utils.escapeHTML(bk.purpose)}</p>
-          <p><strong>Requester:</strong> ${Utils.escapeHTML(bk.requesterName)} (${bk.requesterType})</p>
+          <p><strong>Requester:</strong> ${Utils.escapeHTML(bk.requesterName)} (${Utils.escapeHTML(bk.requesterType)})</p>
           ${isAdmin ? `<p><strong>Contact:</strong> ${Utils.escapeHTML(bk.email)} ${bk.phone ? '&bull; ' + Utils.escapeHTML(bk.phone) : ''}</p>` : ''}
         </div>
       `;
@@ -751,7 +751,7 @@ const Availability = {
       window.location.hash = `#/request?roomId=${room.id}&date=${dateStr}&startSlot=${slotNumber}&endSlot=${slotNumber}`;
     } : null;
 
-    UI.showModal(`Room ${room.roomNo} - Slot ${slotNumber} Inspection`, bodyHtml, onConfirmAction, 'Request This Slot');
+    UI.showModal(`Room ${Utils.escapeHTML(room.roomNo)} - Slot ${slotNumber} Inspection`, bodyHtml, onConfirmAction, 'Request This Slot');
   },
 
   /**
@@ -898,18 +898,18 @@ const Availability = {
               </div>
 
               <div style="margin-top: var(--space-2); display: flex; gap: var(--space-2); flex-wrap: wrap;">
-                <span class="chip">${r.type}</span>
-                <span class="chip">&#128101; ${r.capacity} seats</span>
+                <span class="chip">${Utils.escapeHTML(r.type)}</span>
+                <span class="chip">&#128101; ${Utils.escapeHTML(String(r.capacity))} seats</span>
                 <span class="chip">&#9200; Slots ${startSlot}-${endSlot} Free</span>
               </div>
 
               <div style="margin-top: var(--space-2); font-size: var(--text-xs); color: var(--text-secondary);">
-                <strong>Facilities:</strong> ${(r.facilities || []).join(', ') || 'Standard room'}
+                <strong>Facilities:</strong> ${(r.facilities || []).map(Utils.escapeHTML).join(', ') || 'Standard room'}
               </div>
             </div>
 
             <div style="margin-top: var(--space-4); display: flex; justify-content: flex-end;">
-              <a href="#/request?roomId=${r.id}&date=${date}&startSlot=${startSlot}&endSlot=${endSlot}" class="btn btn-sm btn-primary">Request This Room</a>
+              <a href="#/request?roomId=${encodeURIComponent(r.id)}&date=${encodeURIComponent(date)}&startSlot=${encodeURIComponent(startSlot)}&endSlot=${encodeURIComponent(endSlot)}" class="btn btn-sm btn-primary">Request This Room</a>
             </div>
           </div>
         `;

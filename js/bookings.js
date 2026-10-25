@@ -103,23 +103,22 @@ const Bookings = {
   },
 
   /**
-   * Submits a new booking request.
-   * Checks role quotas, validates fields, and blocks on hard conflicts.
-   * @param {object} formData
-   * @returns {{ success: boolean, ref?: string, errors?: Record<string, string> }}
+   * Calculates the number of active/upcoming requests for a requester.
+   * Excludes completed bookings (past dates or completed today).
+   * @param {string} requesterId
+   * @returns {number}
    */
-  createBooking: function(formData) {
-    const room = Rooms.getById(formData.roomId);
-
-    // 1. Calculate active upcoming booking count for this requester
+  getActiveRequestCount: function(requesterId) {
+    if (!requesterId) return 0;
     const allBookings = this.getAll();
     const now = Utils.getNow();
     const todayStr = Utils.getLocalDateString(now);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const reqIdUpper = requesterId.trim().toUpperCase();
     const self = this;
 
-    const activeCount = allBookings.filter(function(b) {
-      if (b.requesterId.trim().toUpperCase() !== formData.requesterId.trim().toUpperCase()) {
+    return allBookings.filter(function(b) {
+      if (b.requesterId.trim().toUpperCase() !== reqIdUpper) {
         return false;
       }
       if (b.date < todayStr) {
@@ -141,6 +140,19 @@ const Bookings = {
       }
       return true;
     }).length;
+  },
+
+  /**
+   * Submits a new booking request.
+   * Checks role quotas, validates fields, and blocks on hard conflicts.
+   * @param {object} formData
+   * @returns {{ success: boolean, ref?: string, errors?: Record<string, string> }}
+   */
+  createBooking: function(formData) {
+    const room = Rooms.getById(formData.roomId);
+
+    // 1. Calculate active upcoming booking count for this requester
+    const activeCount = this.getActiveRequestCount(formData.requesterId);
 
     // 2. Validate input fields
     const validation = Validators.validateRequestForm(formData, room, activeCount);
@@ -294,42 +306,52 @@ const Bookings = {
 
     const nowIso = Utils.getNow().toISOString();
 
+    // Prepare atomic update across entire bookings collection
+    const allBookings = Store.get('BOOKINGS') || [];
+    const clonedBookings = JSON.parse(JSON.stringify(allBookings));
+
+    const targetBooking = clonedBookings.find(function(b) { return b.id === id; });
+    if (!targetBooking || targetBooking.status !== Config.BOOKING_STATUS.PENDING) {
+      return { success: false, message: 'Target booking was modified or removed. Refresh and retry.', rejectedConflicts: [] };
+    }
+
     // Step 2: Mark current booking as Approved
-    booking.status = Config.BOOKING_STATUS.APPROVED;
-    booking.updatedAt = nowIso;
-    booking.history.push({
+    targetBooking.status = Config.BOOKING_STATUS.APPROVED;
+    targetBooking.updatedAt = nowIso;
+    targetBooking.history.push({
       status: Config.BOOKING_STATUS.APPROVED,
       at: nowIso,
       by: 'Admin',
       note: 'Request approved by Room Coordinator.'
     });
-    const saved = Store.updateItem('BOOKINGS', id, booking);
-    if (!saved) {
-      return { success: false, message: 'Storage write failed. Booking could not be approved.', rejectedConflicts: [] };
-    }
 
-    // Step 3: Auto-reject competing Pending requests
+    // Step 3: Auto-reject competing Pending requests in the same atomic commit
     const competingPending = conflicts.filter(function(c) { return c.type === 'pending'; });
     const autoRejected = [];
 
     competingPending.forEach(function(conflict) {
-      const compBooking = Bookings.getById(conflict.details.id);
+      const compId = conflict.details && conflict.details.id;
+      const compBooking = clonedBookings.find(function(b) { return b.id === compId; });
       if (compBooking && compBooking.status === Config.BOOKING_STATUS.PENDING) {
         compBooking.status = Config.BOOKING_STATUS.REJECTED;
-        compBooking.adminNote = `Slot allotted to request ${booking.ref}`;
+        compBooking.adminNote = `Slot allotted to request ${targetBooking.ref}`;
         compBooking.updatedAt = nowIso;
         compBooking.history.push({
           status: Config.BOOKING_STATUS.REJECTED,
           at: nowIso,
           by: 'System',
-          note: `Slot allotted to request ${booking.ref}`
+          note: `Slot allotted to request ${targetBooking.ref}`
         });
-        Store.updateItem('BOOKINGS', compBooking.id, compBooking);
         autoRejected.push(compBooking);
       }
     });
 
-    const msg = `Booking ${booking.ref} approved.` +
+    const saved = Store.set('BOOKINGS', clonedBookings);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Booking approval and cascade could not be saved.', rejectedConflicts: [] };
+    }
+
+    const msg = `Booking ${targetBooking.ref} approved.` +
       (autoRejected.length > 0 ? ` ${autoRejected.length} competing request(s) were auto-rejected.` : '');
 
     return { success: true, message: msg, rejectedConflicts: autoRejected };
@@ -507,7 +529,7 @@ const Bookings = {
           <tr>
             <td data-label="Reference">
               <button class="footer-link-btn view-details-btn" data-id="${b.id}" type="button" style="font-weight: bold;">
-                ${b.ref}
+                ${Utils.escapeHTML(b.ref)}
               </button>
             </td>
             <td data-label="Room">${Utils.escapeHTML(roomLabel)}</td>
@@ -516,7 +538,7 @@ const Bookings = {
             <td data-label="Purpose" title="${Utils.escapeHTML(b.purpose)}">
               ${Utils.escapeHTML(b.purpose.length > 28 ? b.purpose.substring(0, 28) + '...' : b.purpose)}
             </td>
-            ${isAdmin ? `<td data-label="Requester">${Utils.escapeHTML(b.requesterName)}<br><span style="font-size: 0.7rem; color: var(--text-muted);">${b.requesterId}</span></td>` : ''}
+            ${isAdmin ? `<td data-label="Requester">${Utils.escapeHTML(b.requesterName)}<br><span style="font-size: 0.7rem; color: var(--text-muted);">${Utils.escapeHTML(b.requesterId)}</span></td>` : ''}
             <td data-label="Status">
               <span class="badge ${badgeMap[computed] || 'badge-subtle'}">${computed}</span>
             </td>
@@ -709,7 +731,7 @@ const Bookings = {
           </div>
         `;
 
-        UI.showModal(`Reject Request ${b.ref}`, modalBody, function() {
+        UI.showModal(`Reject Request ${Utils.escapeHTML(b.ref)}`, modalBody, function() {
           const remark = document.getElementById('reject-remark-input').value;
           const res = self.rejectBooking(id, remark);
           if (res.success) {
@@ -769,7 +791,7 @@ const Bookings = {
           </div>
           <div class="progress-step is-complete" style="color: var(--color-danger);">
             <div class="step-circle" style="background-color: var(--color-danger-bg); border-color: var(--color-danger); color: var(--color-danger);">&#10007;</div>
-            <div>${computed}</div>
+            <div>${Utils.escapeHTML(computed)}</div>
           </div>
         </div>
       `;
@@ -800,7 +822,7 @@ const Bookings = {
     (b.history || []).forEach(function(h) {
       historyLines += `
         <li style="margin-bottom: var(--space-2); font-size: var(--text-xs);">
-          <strong>${h.status}</strong> &bull; ${Utils.formatDate(h.at)} ${Utils.formatTime(h.at)} (${h.by})
+          <strong>${Utils.escapeHTML(h.status)}</strong> &bull; ${Utils.formatDate(h.at)} ${Utils.formatTime(h.at)} (${Utils.escapeHTML(h.by)})
           <div style="color: var(--text-secondary);">${Utils.escapeHTML(h.note)}</div>
         </li>
       `;
@@ -812,9 +834,9 @@ const Bookings = {
         <p><strong>Reference:</strong> <code>${Utils.escapeHTML(b.ref)}</code></p>
         <p><strong>Room:</strong> ${Utils.escapeHTML(roomName)}</p>
         <p><strong>Date &amp; Time:</strong> ${Utils.formatDate(b.date)} &bull; ${Utils.formatSlotTime(b.startSlot)} to ${Utils.formatSlotTime(b.endSlot)}</p>
-        <p><strong>Requester:</strong> ${Utils.escapeHTML(b.requesterName)} (${b.requesterType} &bull; ${Utils.escapeHTML(b.requesterId)})</p>
+        <p><strong>Requester:</strong> ${Utils.escapeHTML(b.requesterName)} (${Utils.escapeHTML(b.requesterType)} &bull; ${Utils.escapeHTML(b.requesterId)})</p>
         ${isAdmin ? `<p><strong>Contact:</strong> ${Utils.escapeHTML(b.email)} ${b.phone ? '&bull; ' + Utils.escapeHTML(b.phone) : ''}</p>` : ''}
-        <p><strong>Attendees:</strong> ${b.attendees} persons</p>
+        <p><strong>Attendees:</strong> ${Utils.escapeHTML(String(b.attendees))} persons</p>
         <p><strong>Purpose:</strong> ${Utils.escapeHTML(b.purpose)}</p>
         ${b.requirements && b.requirements.length > 0 ? `<p><strong>Special Requirements:</strong> ${b.requirements.map(function(r) { return Utils.escapeHTML(r); }).join(', ')}</p>` : ''}
         ${b.adminNote ? `<div class="card" style="background-color: var(--bg-subtle); margin-top: var(--space-2);"><p style="margin: 0;"><strong>Coordinator Note:</strong> ${Utils.escapeHTML(b.adminNote)}</p></div>` : ''}
@@ -828,7 +850,7 @@ const Bookings = {
       </div>
     `;
 
-    UI.showModal(`Booking Details: ${b.ref}`, bodyHtml, null, 'Close');
+    UI.showModal(`Booking Details: ${Utils.escapeHTML(b.ref)}`, bodyHtml, null, 'Close');
   },
 
   /**
@@ -1142,7 +1164,7 @@ const Bookings = {
               <p>Your request has been registered and is pending review by the Room Coordinator.</p>
               <div class="card" style="margin: var(--space-4) auto; max-width: 320px; background-color: var(--bg-subtle);">
                 <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Tracking Reference</div>
-                <div style="font-size: var(--text-xl); font-family: var(--font-mono); font-weight: bold; margin-top: 4px;" id="success-ref-val">${result.ref}</div>
+                <div style="font-size: var(--text-xl); font-family: var(--font-mono); font-weight: bold; margin-top: 4px;" id="success-ref-val">${Utils.escapeHTML(result.ref)}</div>
               </div>
               <button id="copy-ref-btn" class="btn btn-secondary btn-sm" type="button">&#128203; Copy Reference</button>
             </div>

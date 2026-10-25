@@ -182,9 +182,12 @@ const UI = {
     }
 
     settings.theme = newTheme;
-    Store.set('SETTINGS', settings);
+    const persisted = Store.set('SETTINGS', settings);
     this.applyTheme(newTheme);
     this.showToast(`Switched to ${newTheme} theme`, 'info');
+    if (!persisted) {
+      this.showToast('Warning: Theme setting saved in-memory only (storage unavailable).', 'warning');
+    }
   },
 
   /**
@@ -206,6 +209,19 @@ const UI = {
   },
 
   /**
+   * Checks whether localStorage is working and toggles storage warning banner.
+   */
+  updateStorageBanner: function() {
+    const storageBanner = document.getElementById('storage-banner');
+    if (!storageBanner) return;
+    if (typeof Store !== 'undefined' && typeof Store.isStorageAvailable === 'function' && !Store.isStorageAvailable()) {
+      storageBanner.classList.remove('hidden');
+    } else {
+      storageBanner.classList.add('hidden');
+    }
+  },
+
+  /**
    * Updates the live clock in the application header and simulation banner.
    */
   updateClock: function() {
@@ -213,6 +229,8 @@ const UI = {
     const clockTime = document.getElementById('clock-time');
     const simBanner = document.getElementById('sim-banner');
     const simText = document.getElementById('sim-banner-text');
+
+    this.updateStorageBanner();
 
     const now = Utils.getNow();
 
@@ -237,9 +255,12 @@ const UI = {
   setSimulatedTime: function(dateTimeStr) {
     const settings = Store.get('SETTINGS') || {};
     settings.simulatedNow = dateTimeStr;
-    Store.set('SETTINGS', settings);
+    const persisted = Store.set('SETTINGS', settings);
     this.updateClock();
     this.showToast('Simulated campus clock set successfully.', 'info');
+    if (!persisted) {
+      this.showToast('Warning: Simulation time saved in-memory only (storage unavailable).', 'warning');
+    }
   },
 
   /**
@@ -248,9 +269,12 @@ const UI = {
   clearSimulatedTime: function() {
     const settings = Store.get('SETTINGS') || {};
     settings.simulatedNow = null;
-    Store.set('SETTINGS', settings);
+    const persisted = Store.set('SETTINGS', settings);
     this.updateClock();
     this.showToast('Simulated time cleared. Real campus clock restored.', 'success');
+    if (!persisted) {
+      this.showToast('Warning: Setting cleared in-memory only (storage unavailable).', 'warning');
+    }
   },
 
   /**

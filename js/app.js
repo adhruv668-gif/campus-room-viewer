@@ -104,9 +104,13 @@ const App = {
     if (footerResetBtn) {
       footerResetBtn.addEventListener('click', function() {
         UI.showModal('Confirm Sample Data Reset', '<p>Are you sure you want to reset all campus buildings, rooms, timetables, and requests back to default sample data? This will clear your custom edits.</p>', function() {
-          Store.resetToSample();
+          const success = Store.resetToSample();
           UI.closeModal();
-          UI.showToast('Sample dataset restored successfully.', 'success');
+          if (success) {
+            UI.showToast('Sample dataset restored successfully.', 'success');
+          } else {
+            UI.showToast('Reset restored in-memory only (storage unavailable).', 'warning');
+          }
           App.navigate(window.location.hash || '#/dashboard');
         }, 'Reset Database', true);
       });

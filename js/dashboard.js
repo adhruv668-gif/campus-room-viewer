@@ -88,15 +88,7 @@ const Dashboard = {
     // 4. User's Active Requests
     let myActiveRequests = 0;
     if (lastRequester.id) {
-      const userRef = lastRequester.id.toUpperCase();
-      allBookings.forEach(function(b) {
-        if (b.requesterId.toUpperCase() === userRef && b.date >= todayDate) {
-          const comp = Bookings.getComputedStatus(b);
-          if (comp === Config.BOOKING_STATUS.PENDING || comp === Config.BOOKING_STATUS.APPROVED) {
-            myActiveRequests++;
-          }
-        }
-      });
+      myActiveRequests = Bookings.getActiveRequestCount(lastRequester.id);
     }
 
     // 5. Building Occupancy Today (Aggregate across slots 1 to 9)
@@ -583,13 +575,13 @@ const Dashboard = {
                 <span class="badge badge-free">Free Slot ${metrics.currentSlot}</span>
               </div>
               <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-bottom: var(--space-2);">
-                ${bldgCode} &bull; Room ${Utils.escapeHTML(room.roomNo)} &bull; Cap: ${room.capacity}
+                ${Utils.escapeHTML(bldgCode)} &bull; Room ${Utils.escapeHTML(room.roomNo)} &bull; Cap: ${Utils.escapeHTML(String(room.capacity))}
               </p>
               <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: var(--space-3);">
                 ${facilitiesBadges}
               </div>
             </div>
-            <a href="#/request?roomId=${room.id}&date=${metrics.todayDate}&startSlot=${metrics.currentSlot}&endSlot=${metrics.currentSlot}" class="btn btn-sm btn-primary" style="width: 100%; text-align: center;">
+            <a href="#/request?roomId=${encodeURIComponent(room.id)}&date=${encodeURIComponent(metrics.todayDate)}&startSlot=${encodeURIComponent(metrics.currentSlot)}&endSlot=${encodeURIComponent(metrics.currentSlot)}" class="btn btn-sm btn-primary" style="width: 100%; text-align: center;">
               &#9997; Quick Reserve
             </a>
           </div>
@@ -640,8 +632,8 @@ const Dashboard = {
         rowsHtml += `
           <tr>
             <td>
-              <button class="btn btn-subtle btn-inspect-booking" data-booking-id="${b.id}" style="font-family: var(--font-mono); font-weight: bold; padding: 2px 6px; font-size: var(--text-xs);">
-                ${b.ref}
+              <button class="btn btn-subtle btn-inspect-booking" data-booking-id="${Utils.escapeHTML(b.id)}" style="font-family: var(--font-mono); font-weight: bold; padding: 2px 6px; font-size: var(--text-xs);">
+                ${Utils.escapeHTML(b.ref)}
               </button>
             </td>
             <td>
@@ -730,10 +722,10 @@ const Dashboard = {
           <li style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-2); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border-subtle); font-size: var(--text-xs);">
             <div>
               <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: 2px;">
-                <button class="btn btn-subtle btn-inspect-booking" data-booking-id="${item.bookingId}" style="padding: 1px 4px; font-family: var(--font-mono); font-size: 0.75rem;">
-                  ${item.ref}
+                <button class="btn btn-subtle btn-inspect-booking" data-booking-id="${Utils.escapeHTML(item.bookingId)}" style="padding: 1px 4px; font-family: var(--font-mono); font-size: 0.75rem;">
+                  ${Utils.escapeHTML(item.ref)}
                 </button>
-                <span class="badge ${badgeClass}" style="font-size: 0.7rem;">${item.status}</span>
+                <span class="badge ${badgeClass}" style="font-size: 0.7rem;">${Utils.escapeHTML(item.status)}</span>
                 <span style="color: var(--text-muted);">&bull; by ${Utils.escapeHTML(item.by)}</span>
               </div>
               <div style="color: var(--text-secondary);">${Utils.escapeHTML(item.note || 'Status updated')}</div>

@@ -64,6 +64,7 @@ const mockUI = {
 
 const context = {
   console: console,
+  Date: Date,
   setTimeout: setTimeout,
   clearTimeout: clearTimeout,
   setInterval: setInterval,
@@ -115,6 +116,25 @@ const Bookings = context.Bookings;
 let passedTests = 0;
 let totalTests = 0;
 
+// Dynamic Date Helpers to prevent date expiration
+function getUpcomingDateForWeekday(targetWeekday, minDaysAhead = 1) {
+  const d = new Date(Utils.getNow().getTime());
+  d.setDate(d.getDate() + minDaysAhead);
+  while (d.getDay() !== targetWeekday) {
+    d.setDate(d.getDate() + 1);
+  }
+  return Utils.getLocalDateString(d);
+}
+
+function getUpcomingFutureDate(daysAhead = 3) {
+  const d = new Date(Utils.getNow().getTime());
+  d.setDate(d.getDate() + daysAhead);
+  if (d.getDay() === 0) {
+    d.setDate(d.getDate() + 1); // skip Sunday
+  }
+  return Utils.getLocalDateString(d);
+}
+
 function runTest(name, fn) {
   totalTests++;
   try {
@@ -165,31 +185,35 @@ runTest('Faculty ID: hyphenated string (EMP-102) fails with specific message', (
 });
 
 runTest('Slot validation: Student exceeding 2 consecutive slots fails', () => {
-  const res = Validators.validateSlots(1, 3, Config.ROLES.STUDENT, '2026-10-28');
+  const futureDate = getUpcomingFutureDate(2);
+  const res = Validators.validateSlots(1, 3, Config.ROLES.STUDENT, futureDate);
   assert.strictEqual(res.valid, false);
   assert.strictEqual(res.error, 'Students can book at most 2 consecutive slots per request.');
 });
 
 runTest('Slot validation: Faculty allowed up to 4 consecutive slots', () => {
-  const res = Validators.validateSlots(1, 4, Config.ROLES.FACULTY, '2026-10-28');
+  const futureDate = getUpcomingFutureDate(2);
+  const res = Validators.validateSlots(1, 4, Config.ROLES.FACULTY, futureDate);
   assert.strictEqual(res.valid, true);
 });
 
 runTest('Slot validation: Faculty exceeding 4 consecutive slots fails', () => {
-  const res = Validators.validateSlots(1, 5, Config.ROLES.FACULTY, '2026-10-28');
+  const futureDate = getUpcomingFutureDate(2);
+  const res = Validators.validateSlots(1, 5, Config.ROLES.FACULTY, futureDate);
   assert.strictEqual(res.valid, false);
   assert.strictEqual(res.error, 'Facultys can book at most 4 consecutive slots per request.');
 });
 
 runTest('Slot validation: Inverted range (endSlot < startSlot) fails', () => {
-  const res = Validators.validateSlots(4, 2, Config.ROLES.STUDENT, '2026-10-28');
+  const futureDate = getUpcomingFutureDate(2);
+  const res = Validators.validateSlots(4, 2, Config.ROLES.STUDENT, futureDate);
   assert.strictEqual(res.valid, false);
   assert.strictEqual(res.error, 'End slot cannot be earlier than start slot.');
 });
 
 runTest('Date validation: Sunday is rejected', () => {
-  // 2026-10-25 is a Sunday
-  const res = Validators.validateDate('2026-10-25');
+  const nextSunday = getUpcomingDateForWeekday(0);
+  const res = Validators.validateDate(nextSunday);
   assert.strictEqual(res.valid, false);
   assert.strictEqual(res.error, 'Campus academic facilities are closed on Sundays. Pick Monday to Saturday.');
 });
@@ -219,8 +243,8 @@ runTest('Range Overlap Logic: (s1 <= e2) && (s2 <= e1)', () => {
 
 runTest('Hard Conflict: Detects scheduled timetable class overlap', () => {
   Store.init(); // loads seed data
-  // Monday (2026-10-26) in room-32-101 has CSE326 class at Slot 1
-  const mondayDate = '2026-10-26';
+  // Upcoming Monday in room-32-101 has CSE326 class at Slot 1
+  const mondayDate = getUpcomingDateForWeekday(1);
   const conflicts = Availability.findConflicts('room-32-101', mondayDate, 1, 2);
   const classConflict = conflicts.find(c => c.type === 'class');
   assert.ok(classConflict, 'Expected hard conflict with scheduled class');
@@ -229,7 +253,7 @@ runTest('Hard Conflict: Detects scheduled timetable class overlap', () => {
 
 runTest('Hard Conflict: Detects overlap with approved booking', () => {
   Store.init();
-  const testDate = '2026-11-04'; // Wednesday without classes at slot 8 & 9
+  const testDate = getUpcomingDateForWeekday(3); // Wednesday without classes at slot 8 & 9
   Store.addItem('BOOKINGS', {
     id: 'test-bk-approved-8',
     ref: 'BK-TEST-01',
@@ -252,7 +276,7 @@ runTest('Hard Conflict: Detects overlap with approved booking', () => {
 
 runTest('Soft Conflict: Detects overlap with pending request', () => {
   Store.init();
-  const testDate = '2026-11-04'; // Wednesday without classes at slot 8 & 9
+  const testDate = getUpcomingDateForWeekday(3); // Wednesday without classes at slot 8 & 9
   Store.addItem('BOOKINGS', {
     id: 'test-bk-pending-8',
     ref: 'BK-TEST-PENDING',
@@ -275,7 +299,7 @@ runTest('Soft Conflict: Detects overlap with pending request', () => {
 
 runTest('No Conflict on adjacent non-overlapping slots', () => {
   Store.init();
-  const testDate = '2026-11-04';
+  const testDate = getUpcomingDateForWeekday(3);
   // Slot 8 and 9 in room-32-101 on Wednesday have no classes in seed data
   Store.addItem('BOOKINGS', {
     id: 'test-bk-adj-8',
@@ -304,7 +328,7 @@ console.log('\n--- 3. Quota Calculation Tests ---');
 
 runTest('Quota Calculation: Student cannot exceed 3 active upcoming requests', () => {
   Store.init();
-  const futureDate = '2026-10-29';
+  const futureDate = getUpcomingFutureDate(3);
   const studentId = '12699999';
 
   // Add 3 pending requests for future date
@@ -381,7 +405,7 @@ runTest('Quota Calculation: Completed bookings earlier today do NOT count agains
   });
 
   // Pick future date without conflicts
-  const futureTestDate = '2026-11-04';
+  const futureTestDate = getUpcomingDateForWeekday(3);
   const res = Bookings.createBooking({
     roomId: 'room-32-101',
     date: futureTestDate,
@@ -411,7 +435,7 @@ console.log('\n--- 4. Maintenance Cancellation Tests ---');
 
 runTest('Maintenance Mode: Toggling ON auto-cancels upcoming bookings in that room', () => {
   Store.init();
-  const futureDate = '2026-10-30';
+  const futureDate = getUpcomingFutureDate(4);
   const targetRoomId = 'room-34-201';
 
   Store.addItem('BOOKINGS', {
@@ -532,7 +556,7 @@ runTest('Bookings.createBooking(): Fails gracefully when Store.addItem fails', (
 
   const res = Bookings.createBooking({
     roomId: 'room-32-101',
-    date: '2026-11-04',
+    date: getUpcomingDateForWeekday(3),
     startSlot: 9,
     endSlot: 9,
     requesterName: 'Storage Fail Tester',
@@ -565,6 +589,172 @@ runTest('Rooms.toggleMaintenance(): Fails gracefully when Store.updateItem fails
   assert.ok(res.message.includes('Storage write failed'));
 
   Store.updateItem = originalUpdateItem;
+});
+
+
+// ----------------------------------------------------
+// 6. HTML & XSS INJECTION PREVENTION TESTS
+// ----------------------------------------------------
+console.log('\n--- 6. HTML & XSS Injection Prevention Tests ---');
+
+runTest('XSS Sanitization: Escapes <script> tags', () => {
+  const dirty = '<script>alert("XSS")</script>';
+  const clean = Utils.escapeHTML(dirty);
+  assert.strictEqual(clean, '&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;');
+  assert.strictEqual(clean.includes('<'), false);
+  assert.strictEqual(clean.includes('>'), false);
+});
+
+runTest('XSS Sanitization: Escapes <img> onerror payload', () => {
+  const dirty = '<img src=x onerror=alert(1)>';
+  const clean = Utils.escapeHTML(dirty);
+  assert.strictEqual(clean, '&lt;img src=x onerror=alert(1)&gt;');
+  assert.strictEqual(clean.includes('<'), false);
+});
+
+runTest('XSS Sanitization: Escapes single quotes and SQL/attribute delimiters', () => {
+  const dirty = "' OR 1=1 --";
+  const clean = Utils.escapeHTML(dirty);
+  assert.strictEqual(clean, '&#39; OR 1=1 --');
+});
+
+runTest('XSS Sanitization: Escapes all special characters (&, <, >, ", \')', () => {
+  const dirty = '& < > " \'';
+  const clean = Utils.escapeHTML(dirty);
+  assert.strictEqual(clean, '&amp; &lt; &gt; &quot; &#39;');
+});
+
+runTest('XSS Sanitization: Handles non-string primitives and null/undefined safely', () => {
+  assert.strictEqual(Utils.escapeHTML(null), '');
+  assert.strictEqual(Utils.escapeHTML(undefined), '');
+  assert.strictEqual(Utils.escapeHTML(12345), '12345');
+  assert.strictEqual(Utils.escapeHTML(true), 'true');
+});
+
+
+// ----------------------------------------------------
+// 7. ATOMIC CASCADE & BACKUP ROLLBACK TESTS
+// ----------------------------------------------------
+console.log('\n--- 7. Atomic Cascade & Backup Rollback Tests ---');
+
+runTest('Backup Import: Rejects invalid or incomplete backup schema without modifying state', () => {
+  Store.init();
+  const originalRoomsCount = Store.get('ROOMS').length;
+
+  // Incomplete payload: missing rooms, timetable, bookings
+  const invalidPayload = JSON.stringify({
+    buildings: [{ id: 'bldg-fake', name: 'Fake Block', code: 'FB' }]
+  });
+
+  const res = Store.importBackup(invalidPayload);
+  assert.strictEqual(res.success, false);
+  assert.ok(res.message && res.message.includes('Missing required collections'));
+
+  // State must remain intact
+  assert.strictEqual(Store.get('ROOMS').length, originalRoomsCount);
+});
+
+runTest('Backup Import: Rejects malformed JSON string without modifying state', () => {
+  Store.init();
+  const originalBuildingsCount = Store.get('BUILDINGS').length;
+
+  const res = Store.importBackup('This is not JSON {{{{');
+  assert.strictEqual(res.success, false);
+  assert.ok(res.message && res.message.includes('Corrupted JSON'));
+  assert.strictEqual(Store.get('BUILDINGS').length, originalBuildingsCount);
+});
+
+runTest('Backup Import: Staged rollback executes when a storage write fails', () => {
+  Store.init();
+  const originalBuildingsCount = Store.get('BUILDINGS').length;
+  const originalRoomsCount = Store.get('ROOMS').length;
+
+  const validPayload = JSON.stringify({
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    buildings: [{ id: 'bldg-new', name: 'New Block', code: 'NB', floors: 3 }],
+    rooms: [{ id: 'room-new', buildingId: 'bldg-new', roomNo: '101', name: 'New Room', type: 'Classroom', capacity: 40, facilities: [], status: 'Available' }],
+    timetable: [],
+    bookings: [],
+    settings: { theme: 'light' }
+  });
+
+  // Mock Store.set to fail when writing 'timetable'
+  const originalSet = Store.set;
+  Store.set = function(key, data) {
+    if (key === 'TIMETABLE') {
+      return false; // simulate write failure mid-transaction
+    }
+    return originalSet.call(Store, key, data);
+  };
+
+  const res = Store.importBackup(validPayload);
+  assert.strictEqual(res.success, false);
+  assert.ok(res.message && res.message.includes('failed'));
+
+  // Restore original Store.set
+  Store.set = originalSet;
+
+  // Verify rollback: Buildings and rooms must match initial snapshot
+  assert.strictEqual(Store.get('BUILDINGS').length, originalBuildingsCount);
+  assert.strictEqual(Store.get('ROOMS').length, originalRoomsCount);
+});
+
+runTest('Bookings.approveBooking(): Atomic cascade returns false and leaves target pending if storage fails', () => {
+  Store.init();
+  const testDate = getUpcomingDateForWeekday(3); // Wednesday slot 9 has no classes
+
+  // Add a pending booking for slot 9
+  Store.addItem('BOOKINGS', {
+    id: 'cascade-fail-bk-1',
+    ref: 'BK-CAS-01',
+    roomId: 'room-32-101',
+    date: testDate,
+    startSlot: 9,
+    endSlot: 9,
+    requesterName: 'Cascade Tester',
+    requesterId: '12611041',
+    requesterType: 'Student',
+    status: 'Pending',
+    history: []
+  });
+
+  // Mock Store.set to fail on BOOKINGS write
+  const originalSet = Store.set;
+  Store.set = function(key, data) {
+    if (key === 'BOOKINGS') {
+      return false;
+    }
+    return originalSet.call(Store, key, data);
+  };
+
+  const res = Bookings.approveBooking('cascade-fail-bk-1');
+  assert.strictEqual(res.success, false);
+  assert.ok(res.message && res.message.includes('Storage write failed'));
+
+  // Restore Store.set
+  Store.set = originalSet;
+
+  // Verify booking was not marked approved
+  const target = Store.get('BOOKINGS').find(b => b.id === 'cascade-fail-bk-1');
+  assert.strictEqual(target.status, 'Pending');
+});
+
+runTest('Store.isStorageAvailable(): Reports correct boolean status', () => {
+  Store.init();
+  assert.strictEqual(Store.isStorageAvailable(), true);
+
+  // Simulate storage quota exception
+  const originalSetItem = mockLocalStorage.setItem;
+  mockLocalStorage.setItem = function() {
+    throw new Error('QuotaExceededError');
+  };
+
+  Store.set('SETTINGS', { theme: 'dark' });
+  assert.strictEqual(Store.isStorageAvailable(), false);
+
+  mockLocalStorage.setItem = originalSetItem;
+  Store._isStorageAvailable = true;
 });
 
 console.log('\n====================================================');
