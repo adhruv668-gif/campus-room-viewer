@@ -9,9 +9,9 @@
 
 **Execution Command:** `node test/test-suite.js`  
 **Execution Environment:** Node.js v24.19.0 (Windows x64)  
-**Result:** **44 of 44 Passed (100%)** | **0 Failed**
+**Result:** **46 of 46 Passed (100%)** | **0 Failed**
 
-> **Note on Test Suite Grep Count:** Searching `test/test-suite.js` for the string `runTest(` produces **45 matches**: exactly 1 is the harness declaration `function runTest(name, fn)`, and 44 are the discrete test case executions (`AUT-01` through `AUT-44`). Exactly 44 tests register, execute, and pass synchronously.
+> **Note on Test Suite Grep Count:** Searching `test/test-suite.js` for the string `runTest(` produces **47 matches**: exactly 1 is the harness declaration `function runTest(name, fn)`, and 46 are the discrete test case executions (`AUT-01` through `AUT-46`). Exactly 46 tests register, execute, and pass synchronously.
 
 ### 1.1 Validation Subsystem
 | Test ID | Test Case Description | Input / Condition | Expected Result | Status |
@@ -84,13 +84,15 @@
 | **AUT-42** | App filter state persistence across views | Update `App.state.filters.grid` and `.finder` | Filters retained across view switching and re-render cycles | **Pass** |
 | **AUT-43** | Modal event listeners idempotent registration | Call `UI.initModal()` multiple times | Listeners bound exactly once; duplicate calls are safe no-ops | **Pass** |
 | **AUT-44** | Admin authorization guard check | Non-admin invoking `toggleMaintenance`, `deleteRoom`, `approveBooking`, `rejectBooking` | Returns `success: false` with `"Unauthorized"` message | **Pass** |
+| **AUT-45** | Past booking cancellation rejection | Attempting to cancel an ended/past booking | Returns `success: false` with `"Cannot cancel a booking that has already taken place or passed"` | **Pass** |
+| **AUT-46** | Legacy backup single-slot normalization | JSON backup payload containing legacy `slot: 3` without `startSlot`/`endSlot` | `success: true`; record normalized to `startSlot: 3, endSlot: 3` and imported | **Pass** |
 
 ---
 
 ## 2. Executed Failed Tests
 
 - **Failed Count:** **0**
-- All 44 automated tests execute synchronously and pass cleanly without unhandled rejections or runtime exceptions.
+- All 46 automated tests execute synchronously and pass cleanly without unhandled rejections or runtime exceptions.
 
 ---
 

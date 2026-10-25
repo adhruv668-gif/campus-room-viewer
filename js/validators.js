@@ -178,7 +178,8 @@ const Validators = {
       if (slotDef) {
         const slotStartMinutes = slotDef.startHour * 60 + slotDef.startMin;
         const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        if (nowMinutes >= slotStartMinutes) {
+        const graceMinutes = (typeof Config !== 'undefined' && Config.LIMITS && Config.LIMITS.SLOT_GRACE_MINUTES) ? Config.LIMITS.SLOT_GRACE_MINUTES : 15;
+        if (nowMinutes >= slotStartMinutes + graceMinutes) {
           return { valid: false, error: `Slot ${startSlot} (${slotDef.start} - ${slotDef.end}) has already started or passed today. Select an upcoming slot.` };
         }
       }

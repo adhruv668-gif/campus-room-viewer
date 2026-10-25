@@ -159,6 +159,9 @@ const App = {
               Store._memoryCache[e.key] = e.newValue ? JSON.parse(e.newValue) : null;
             } catch (err) {}
           }
+          if (typeof UI !== 'undefined' && UI.closeModal) {
+            UI.closeModal();
+          }
           App.navigate(window.location.hash || '#/dashboard');
         }
       });

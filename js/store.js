@@ -250,6 +250,17 @@ const Store = {
       return { success: false, message: 'Invalid backup schema: Missing required collections.' };
     }
 
+    // Normalize legacy single-slot bookings (b.slot -> b.startSlot, b.endSlot)
+    data.bookings.forEach(function(b) {
+      if (b && typeof b === 'object' && typeof b.slot === 'number' && b.startSlot === undefined) {
+        b.startSlot = b.slot;
+        b.endSlot = (typeof b.endSlot === 'number') ? b.endSlot : b.slot;
+      }
+      if (b && typeof b === 'object' && !Array.isArray(b.history)) {
+        b.history = [];
+      }
+    });
+
     const invalidBldg = data.buildings.some(function(b) {
       return !b || typeof b !== 'object' ||
              typeof b.id !== 'string' || !b.id.trim() ||

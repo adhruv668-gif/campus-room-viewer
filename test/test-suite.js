@@ -1054,6 +1054,71 @@ runTest('Admin Authorization: Non-admin mutations are rejected with unauthorized
   assert.ok(rejectRes.message.includes('Unauthorized'));
 });
 
+runTest('Bookings.cancelBooking(): Rejects cancellation of past or elapsed booking', () => {
+  Store.init();
+  const today = Utils.getNow();
+  const todayStr = Utils.getLocalDateString(today);
+
+  // Set simulated clock to 16:00
+  const simDate = new Date(today.getTime());
+  simDate.setHours(16, 0, 0, 0);
+  Store.set('SETTINGS', { simulatedNow: simDate.toISOString() });
+
+  // Add booking from earlier today (Slot 1: 09:00 - 10:00)
+  Store.addItem('BOOKINGS', {
+    id: 'past-cancel-bk-1',
+    ref: 'BK-PAST-CANCEL',
+    roomId: 'room-32-101',
+    date: todayStr,
+    startSlot: 1,
+    endSlot: 1,
+    requesterName: 'Past Requester',
+    requesterId: '12611041',
+    requesterType: 'Student',
+    status: 'Approved',
+    history: []
+  });
+
+  const res = Bookings.cancelBooking('past-cancel-bk-1', 'Attempt past cancel');
+  assert.strictEqual(res.success, false);
+  assert.ok(res.message.includes('already taken place or passed') || res.message.includes('Completed'));
+
+  // Reset simulated clock
+  Store.set('SETTINGS', {});
+});
+
+runTest('Backup Import: Normalizes legacy single-slot booking records', () => {
+  Store.init();
+  const legacyBackupPayload = JSON.stringify({
+    version: '1.0',
+    buildings: [{ id: 'bldg-1', code: 'B1', name: 'Block 1' }],
+    rooms: [{ id: 'room-1', buildingId: 'bldg-1', roomNo: '101', name: 'R101', type: 'Classroom', capacity: 30, status: 'Active' }],
+    timetable: [],
+    bookings: [
+      {
+        id: 'legacy-bk-1',
+        ref: 'RB-20261024-999',
+        roomId: 'room-1',
+        date: '2026-11-10',
+        slot: 3,
+        status: 'Approved',
+        requesterName: 'Legacy User',
+        requesterId: '12611041',
+        requesterType: 'Student',
+        history: []
+      }
+    ]
+  });
+
+  const res = Store.importBackup(legacyBackupPayload);
+  assert.strictEqual(res.success, true);
+
+  const imported = Store.get('BOOKINGS').find(b => b.id === 'legacy-bk-1');
+  assert.ok(imported, 'Legacy booking must be imported');
+  assert.strictEqual(imported.startSlot, 3);
+  assert.strictEqual(imported.endSlot, 3);
+});
+
 console.log('\n====================================================');
 console.log(`TEST SUMMARY: ${passedTests} / ${totalTests} tests passed (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('====================================================\n');

@@ -415,6 +415,26 @@ const Bookings = {
       return { success: false, message: `Cannot cancel a booking that is ${computed}.` };
     }
 
+    const now = Utils.getNow();
+    const todayStr = Utils.getLocalDateString(now);
+    let isPast = false;
+    if (booking.date < todayStr) {
+      isPast = true;
+    } else if (booking.date === todayStr) {
+      const slotDef = Config.SLOTS.find(function(s) { return s.id === booking.endSlot; });
+      if (slotDef) {
+        const slotEndMinutes = slotDef.endHour * 60 + slotDef.endMin;
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        if (nowMinutes >= slotEndMinutes) {
+          isPast = true;
+        }
+      }
+    }
+
+    if (isPast) {
+      return { success: false, message: 'Cannot cancel a booking that has already taken place or passed.' };
+    }
+
     const nowIso = Utils.getNow().toISOString();
     const role = (typeof App !== 'undefined' && App.getCurrentRole) ? App.getCurrentRole() : 'User';
 
@@ -532,9 +552,25 @@ const Bookings = {
 
         const timeSpan = Utils.formatSlotRange(b.startSlot, b.endSlot);
 
+        const now = Utils.getNow();
+        const todayStr = Utils.getLocalDateString(now);
+        let isPast = false;
+        if (b.date < todayStr) {
+          isPast = true;
+        } else if (b.date === todayStr) {
+          const slotDef = Config.SLOTS.find(function(s) { return s.id === b.endSlot; });
+          if (slotDef) {
+            const slotEndMinutes = slotDef.endHour * 60 + slotDef.endMin;
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            if (nowMinutes >= slotEndMinutes) {
+              isPast = true;
+            }
+          }
+        }
+
         const isOwner = (b.requesterId.toUpperCase() === (lastRequester.id || '').toUpperCase());
-        const canEdit = isOwner && (computed === 'Pending');
-        const canCancel = (isOwner || isAdmin) && (computed === 'Pending' || computed === 'Approved');
+        const canEdit = isOwner && (computed === 'Pending') && !isPast;
+        const canCancel = (isOwner || isAdmin) && (computed === 'Pending' || computed === 'Approved') && !isPast;
 
         rows += `
           <tr>
@@ -1123,12 +1159,13 @@ const Bookings = {
         return;
       }
 
-      // Check if requested slot has already begun on the current day
+      // Check if requested slot has already begun on the current day beyond grace window
       if (date === Utils.getLocalDateString(Utils.getNow())) {
         const slotDef = Config.SLOTS.find(function(s) { return s.id === startSlot; });
         const now = Utils.getNow();
         const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        if (slotDef && nowMinutes >= (slotDef.startHour * 60 + slotDef.startMin)) {
+        const graceMinutes = (typeof Config !== 'undefined' && Config.LIMITS && Config.LIMITS.SLOT_GRACE_MINUTES) ? Config.LIMITS.SLOT_GRACE_MINUTES : 15;
+        if (slotDef && nowMinutes >= (slotDef.startHour * 60 + slotDef.startMin + graceMinutes)) {
           liveBox.innerHTML = `<span style="color: var(--color-danger);">&#10060; <strong>Slot Elapsed:</strong> Slot ${startSlot} (${slotDef.start} - ${slotDef.end}) has already started or passed today. Select an upcoming slot.</span>`;
           return;
         }
@@ -1156,12 +1193,13 @@ const Bookings = {
       const isToday = dateEl.value === Utils.getLocalDateString(Utils.getNow());
       const now = Utils.getNow();
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const graceMinutes = (typeof Config !== 'undefined' && Config.LIMITS && Config.LIMITS.SLOT_GRACE_MINUTES) ? Config.LIMITS.SLOT_GRACE_MINUTES : 15;
 
       [startEl, endEl].forEach(function(select) {
         Array.from(select.options).forEach(function(opt) {
           const slotId = parseInt(opt.value, 10);
           const slot = Config.SLOTS.find(function(s) { return s.id === slotId; });
-          if (isToday && slot && nowMinutes >= (slot.startHour * 60 + slot.startMin)) {
+          if (isToday && slot && nowMinutes >= (slot.startHour * 60 + slot.startMin + graceMinutes)) {
             opt.disabled = true;
             opt.textContent = `${slot.label} (${select === endEl ? slot.end : slot.start}) [Passed]`;
           } else if (slot) {
