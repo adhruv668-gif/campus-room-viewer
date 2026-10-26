@@ -1560,13 +1560,15 @@ const Bookings = {
    * @param {number} [endSlot]
    */
   openBookingDrawer: function(roomId, dateStr, startSlot, endSlot) {
-    const room = Rooms.getById(roomId);
+    const cleanRoomId = typeof roomId === 'string' ? roomId.trim() : String(roomId || '');
+    const room = Rooms.getById(cleanRoomId);
     if (!room) return;
     const bldg = Rooms.getBuildingById(room.buildingId);
     const todayStr = Utils.getLocalDateString(Utils.getNow());
-    const date = dateStr || todayStr;
-    const initialStart = startSlot || 1;
-    const initialEnd = endSlot || initialStart;
+    const validDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const date = (typeof dateStr === 'string' && validDateRegex.test(dateStr)) ? dateStr : todayStr;
+    const initialStart = Math.max(1, Math.min(9, parseInt(startSlot, 10) || 1));
+    const initialEnd = Math.max(initialStart, Math.min(9, parseInt(endSlot, 10) || initialStart));
 
     const drawerBackdrop = document.getElementById('booking-drawer-backdrop');
     const drawerEl = document.getElementById('booking-drawer');
@@ -1588,6 +1590,18 @@ const Bookings = {
 
     // Helper to render drawer content
     const renderDrawerUI = function() {
+      selectedDate = (/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : todayStr;
+      selectedStart = Math.max(1, Math.min(9, parseInt(selectedStart, 10) || 1));
+      selectedEnd = Math.max(selectedStart, Math.min(9, parseInt(selectedEnd, 10) || selectedStart));
+      const safeRoomNo = Utils.escapeHTML(room.roomNo);
+      const safeRoomName = Utils.escapeHTML(room.name);
+      const safeBldgName = Utils.escapeHTML(bldg ? bldg.name : '');
+      const safeRoomType = Utils.escapeHTML(room.type);
+      const safeCapacity = Utils.escapeHTML(String(room.capacity || '0'));
+      const safeSelectedDate = Utils.escapeHTML(selectedDate);
+      const safeTodayStr = Utils.escapeHTML(todayStr);
+      const safeSlotRange = Utils.escapeHTML(Utils.formatSlotRange(selectedStart, selectedEnd));
+
       // 9 slot picker pills
       let slotPills = '';
       for (let s = 1; s <= 9; s++) {
@@ -1643,8 +1657,8 @@ const Bookings = {
         <div class="drawer-header">
           <div>
             <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Instant Booking Drawer</div>
-            <h3 style="margin: 0; font-size: 1.25rem;">Room ${Utils.escapeHTML(room.roomNo)} &bull; ${Utils.escapeHTML(room.name)}</h3>
-            <div style="font-size: var(--text-xs); color: var(--text-secondary);">${Utils.escapeHTML(bldg ? bldg.name : '')} &bull; ${Utils.escapeHTML(room.type)} &bull; Cap: ${room.capacity}</div>
+            <h3 style="margin: 0; font-size: 1.25rem;">Room ${safeRoomNo} &bull; ${safeRoomName}</h3>
+            <div style="font-size: var(--text-xs); color: var(--text-secondary);">${safeBldgName} &bull; ${safeRoomType} &bull; Cap: ${safeCapacity}</div>
           </div>
           <button type="button" id="drawer-close-btn" class="btn-icon" aria-label="Close booking drawer">&times;</button>
         </div>
@@ -1653,7 +1667,7 @@ const Bookings = {
           <!-- Date & Slot Picker -->
           <div class="form-group">
             <label for="drawer-date-input" class="form-label">Reservation Date:</label>
-            <input type="date" id="drawer-date-input" class="form-input" value="${selectedDate}" min="${todayStr}" />
+            <input type="date" id="drawer-date-input" class="form-input" value="${safeSelectedDate}" min="${safeTodayStr}" />
           </div>
 
           <div>
@@ -1662,7 +1676,7 @@ const Bookings = {
               ${slotPills}
             </div>
             <div class="form-hint" style="margin-top: 4px;">
-              Selected: <strong>Slot ${selectedStart} to Slot ${selectedEnd}</strong> (${Utils.formatSlotRange(selectedStart, selectedEnd)})
+              Selected: <strong>Slot ${selectedStart} to Slot ${selectedEnd}</strong> (${safeSlotRange})
             </div>
           </div>
 
@@ -1698,8 +1712,8 @@ const Bookings = {
 
           <div class="grid-2col" style="gap: var(--space-2);">
             <div>
-              <label for="drawer-attendees-input" class="form-label">Attendees (Max ${room.capacity}):</label>
-              <input type="number" id="drawer-attendees-input" class="form-input" value="4" min="1" max="${room.capacity}" />
+              <label for="drawer-attendees-input" class="form-label">Attendees (Max ${safeCapacity}):</label>
+              <input type="number" id="drawer-attendees-input" class="form-input" value="4" min="1" max="${safeCapacity}" />
             </div>
             <div>
               <label for="drawer-phone-input" class="form-label">Phone Contact:</label>

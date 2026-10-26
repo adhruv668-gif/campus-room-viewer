@@ -1,0 +1,28 @@
+name: Feature Request
+description: Suggest an enhancement or new feature
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Have an idea for CampusSpace? We'd love to hear it!
+  - type: input
+    id: feature-title
+    attributes:
+      label: Feature Proposal
+      description: Clear summary of the requested feature
+    validations:
+      required: true
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Context
+      description: What challenge or user flow does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: How should this work from a user or admin perspective?
+    validations:
+      required: true
