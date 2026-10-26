@@ -13,7 +13,7 @@
  * - setRole(newRole, pinAttempt): boolean - Switches user persona with admin PIN check.
  * - getCurrentRole(): string - Returns active user role.
  * - getActiveRoute(): string - Returns current active route string.
- * - renderHelpView(containerEl): void - Renders user guide, viva rules, and credits.
+ * - renderHelpView(containerEl): void - Renders campus guidelines, estate directory, and FAQs.
  */
 
 'use strict';
@@ -21,6 +21,7 @@
 const App = {
   _activeRoute: 'dashboard',
   _clockInterval: null,
+  _umsUserMemory: null,
   state: {
     filters: {
       grid: {},
@@ -91,6 +92,59 @@ const App = {
           }
         } else {
           App.setRole(targetRole);
+        }
+      });
+    }
+
+    // 5b. Initialize UMS Profile Pill
+    this.updateUmsNavbarPill();
+    const umsPill = document.getElementById('ums-profile-pill');
+    if (umsPill) {
+      umsPill.addEventListener('click', function() {
+        if (typeof UI !== 'undefined' && UI.showUmsLoginModal) {
+          UI.showUmsLoginModal();
+        }
+      });
+      umsPill.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (typeof UI !== 'undefined' && UI.showUmsLoginModal) {
+            UI.showUmsLoginModal();
+          }
+        }
+      });
+    }
+
+    // 5c. Initialize Command Palette Trigger
+    const cmdBtn = document.getElementById('cmd-palette-btn');
+    if (cmdBtn) {
+      cmdBtn.addEventListener('click', function() {
+        if (typeof UI !== 'undefined' && UI.showCommandPalette) {
+          UI.showCommandPalette();
+        }
+      });
+    }
+
+    // 5d. Global Keyboard Shortcuts (Ctrl+K, Cmd+K, '/')
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+          e.preventDefault();
+          if (typeof UI !== 'undefined' && UI.showCommandPalette) {
+            UI.showCommandPalette();
+          }
+          return;
+        }
+        if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const activeEl = document.activeElement;
+          const tag = (activeEl && activeEl.tagName) ? activeEl.tagName.toUpperCase() : '';
+          const isInput = activeEl && (activeEl.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+          if (!isInput) {
+            e.preventDefault();
+            if (typeof UI !== 'undefined' && UI.showCommandPalette) {
+              UI.showCommandPalette();
+            }
+          }
         }
       });
     }
@@ -249,6 +303,71 @@ const App = {
   },
 
   /**
+   * Retrieves active UMS user session profile.
+   * @returns {{ id: string, name: string, role: string, department?: string, email?: string, phone?: string } | null}
+   */
+  getUmsUser: function() {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const raw = sessionStorage.getItem('CAMPUS_UMS_USER');
+        if (raw) return JSON.parse(raw);
+      }
+    } catch (e) {}
+    return this._umsUserMemory || null;
+  },
+
+  /**
+   * Sets active UMS user profile and synchronizes navbar pill.
+   * @param {object|null} userObj
+   * @returns {object|null}
+   */
+  setUmsUser: function(userObj) {
+    this._umsUserMemory = userObj;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        if (userObj) {
+          sessionStorage.setItem('CAMPUS_UMS_USER', JSON.stringify(userObj));
+        } else {
+          sessionStorage.removeItem('CAMPUS_UMS_USER');
+        }
+      }
+    } catch (e) {}
+    this.updateUmsNavbarPill();
+    return userObj;
+  },
+
+  /**
+   * Clears active UMS user session.
+   */
+  clearUmsUser: function() {
+    this.setUmsUser(null);
+  },
+
+  /**
+   * Synchronizes header UMS profile pill display with current session.
+   */
+  updateUmsNavbarPill: function() {
+    if (typeof document === 'undefined') return;
+    const pill = document.getElementById('ums-profile-pill');
+    if (!pill) return;
+    const user = this.getUmsUser();
+    const nameEl = document.getElementById('ums-user-name');
+    const subEl = document.getElementById('ums-user-sub');
+
+    if (user) {
+      pill.classList.add('signed-in');
+      if (nameEl) nameEl.textContent = user.name;
+      if (subEl) subEl.textContent = `${user.id} • ${user.role}`;
+      pill.setAttribute('title', `Signed in as ${user.name} (${user.id} • ${user.role}) - Click to switch profile`);
+    } else {
+      pill.classList.remove('signed-in');
+      if (nameEl) nameEl.textContent = 'UMS Sign In';
+      if (subEl) subEl.textContent = 'Click to switch';
+      pill.setAttribute('title', 'LPU UMS Account Profile - Click to sign in');
+    }
+  },
+
+  /**
    * Client-side hash routing dispatcher.
    * @param {string} routeHash
    */
@@ -291,7 +410,7 @@ const App = {
       request: 'Request a Room',
       requests: 'Booking Requests',
       admin: 'Admin Portal',
-      help: 'Help & Project Documentation'
+      help: 'Campus Booking Guidelines & Support'
     };
 
     document.title = `${titleMap[route] || 'Viewer'} | ${Config.APP_NAME}`;
@@ -317,7 +436,8 @@ const App = {
       if (typeof Availability !== 'undefined' && Availability.renderGrid) {
         const dateParam = queryParams.get('date');
         const buildingParam = queryParams.get('building');
-        Availability.renderGrid(contentEl, { date: dateParam, buildingId: buildingParam });
+        const roomParam = queryParams.get('room');
+        Availability.renderGrid(contentEl, { date: dateParam, buildingId: buildingParam, searchQuery: roomParam });
       }
     } else if (route === 'find') {
       if (typeof Availability !== 'undefined' && Availability.renderFinder) {
@@ -383,7 +503,7 @@ const App = {
   },
 
   /**
-   * Renders Help, Rules, Viva Cheat-sheet, and Assignment Project Context.
+   * Renders Campus Guidelines, Helpdesk Directory, FAQs, and Platform Credits.
    * @param {HTMLElement} containerEl
    */
   renderHelpView: function(containerEl) {
@@ -427,21 +547,87 @@ const App = {
       </div>
 
       <div class="card" style="margin-bottom: var(--space-6);">
-        <h2>Viva Examiner &amp; Live Modification Reference</h2>
-        <p style="margin-bottom: var(--space-3);">This project was developed strictly with Vanilla HTML5, CSS3, and ES6 JavaScript with zero external frameworks or libraries. Key modules for live examiner drills:</p>
-        <ul style="margin-left: var(--space-6); line-height: 1.8;">
-          <li><code>js/config.js</code>: Edit slot definitions, max consecutive limits, or demo PIN live.</li>
-          <li><code>js/availability.js</code>: Algorithm for slot status precedence and range overlap detection.</li>
-          <li><code>js/validators.js</code>: Independent input validators and XSS escaping logic.</li>
-          <li><code>js/store.js</code>: LocalStorage schema serialization with in-memory fallback.</li>
-        </ul>
+        <h2>LPU Block Estates &amp; Technical Helpdesk Directory</h2>
+        <p class="form-hint" style="margin-bottom: var(--space-3);">For immediate classroom assistance, smart-board troubleshooting, or key dispatch, contact your designated block estate coordinator:</p>
+        <div style="overflow-x: auto;">
+          <table class="data-table" style="font-size: var(--text-xs);">
+            <thead>
+              <tr>
+                <th>Campus Block</th>
+                <th>Academic School / Focus</th>
+                <th>Coordinator Ext.</th>
+                <th>Helpdesk Location</th>
+                <th>Operating Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Block 32</strong></td>
+                <td>Academic Complex &amp; Lecture Theatres</td>
+                <td><code>Ext: 3201 / 3204</code></td>
+                <td>Room 32-101 Ground Floor Desk</td>
+                <td>09:00 - 18:00 IST (Mon-Sat)</td>
+              </tr>
+              <tr>
+                <td><strong>Block 33</strong></td>
+                <td>School of Computer Applications</td>
+                <td><code>Ext: 3301 / 3305</code></td>
+                <td>Room 33-104 Coordinator Wing</td>
+                <td>09:00 - 18:00 IST (Mon-Sat)</td>
+              </tr>
+              <tr>
+                <td><strong>Block 34</strong></td>
+                <td>School of CSE &amp; AI Research Labs</td>
+                <td><code>Ext: 3402 / 3408</code></td>
+                <td>Room 34-201 Systems Lab Desk</td>
+                <td>09:00 - 18:00 IST (Mon-Sat)</td>
+              </tr>
+              <tr>
+                <td><strong>Lab Complex</strong></td>
+                <td>Central Engineering &amp; Robotics Labs</td>
+                <td><code>Ext: 3810 / 3812</code></td>
+                <td>Room BLAB-01 Central Dispatch</td>
+                <td>09:00 - 18:00 IST (Mon-Sat)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="form-hint" style="margin-top: var(--space-3);"><strong>Central Emergency Escalation:</strong> For urgent audio-visual, HVAC, or power emergencies during live class sessions, contact Central Estate Control: <code>01824-510000</code> or <code>estate.support@lpu.in</code>.</p>
+      </div>
+
+      <div class="card" style="margin-bottom: var(--space-6);">
+        <h2>Frequently Asked Reservation Questions (FAQ)</h2>
+        <details style="margin-top: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--border-color);">
+          <summary style="font-weight: var(--font-semibold); cursor: pointer;">How does the pending conflict queue and administrative approval work?</summary>
+          <p style="margin-top: var(--space-2); font-size: var(--text-sm); line-height: 1.6; color: var(--text-secondary);">Multiple users can submit pending requests for the same room and slot (soft conflict). When the Room Coordinator approves one reservation, all competing pending requests are automatically updated to Rejected with an audit remark citing the approved reference ID.</p>
+        </details>
+        <details style="padding: var(--space-2) 0; border-bottom: 1px solid var(--border-color);">
+          <summary style="font-weight: var(--font-semibold); cursor: pointer;">What occurs when a room enters Maintenance Mode?</summary>
+          <p style="margin-top: var(--space-2); font-size: var(--text-sm); line-height: 1.6; color: var(--text-secondary);">Any upcoming reservations in that room are automatically cancelled, and affected requesters receive administrative notices. Completed historical records from earlier today remain intact for auditing purposes.</p>
+        </details>
+        <details style="padding: var(--space-2) 0; border-bottom: 1px solid var(--border-color);">
+          <summary style="font-weight: var(--font-semibold); cursor: pointer;">How do I export room reservations to my personal calendar?</summary>
+          <p style="margin-top: var(--space-2); font-size: var(--text-sm); line-height: 1.6; color: var(--text-secondary);">Click the <strong>📅 Add to Calendar (.ics)</strong> button on any booking card or in the booking details modal to download an RFC 5545 <code>.ics</code> file compatible with Google Calendar, Microsoft Outlook, and Apple Calendar.</p>
+        </details>
+        <details style="padding: var(--space-2) 0; border-bottom: 1px solid var(--border-color);">
+          <summary style="font-weight: var(--font-semibold); cursor: pointer;">Can I print an official room reservation pass or door timetable?</summary>
+          <p style="margin-top: var(--space-2); font-size: var(--text-sm); line-height: 1.6; color: var(--text-secondary);">Yes! Use the <strong>🖨️ Print Reservation Pass</strong> button inside the booking details modal or <strong>🖨️ Print Schedule</strong> on the Availability Matrix. The portal automatically formats clean, professional single-page printouts with verification metadata.</p>
+        </details>
+        <details style="padding: var(--space-2) 0;">
+          <summary style="font-weight: var(--font-semibold); cursor: pointer;">What are the role-based reservation limits?</summary>
+          <p style="margin-top: var(--space-2); font-size: var(--text-sm); line-height: 1.6; color: var(--text-secondary);">Students may book up to 2 consecutive slots and maintain at most 3 active upcoming requests. Faculty members may reserve up to 4 consecutive slots with a quota of 6 active requests. Bookings from earlier today whose slots have ended do not count against your quota.</p>
+        </details>
       </div>
 
       <div class="card">
-        <h2>Academic Project Attributions</h2>
-        <p><strong>Course:</strong> CSE326 - Web Technology &bull; CA1 Problem Statement-Based Project</p>
-        <p><strong>Institution:</strong> Lovely Professional University (LPU), Punjab</p>
-        <p><strong>Team SOUL:</strong> Angel Seth, Kartik, Dhruv Anand (First-Year B.Tech CSE)</p>
+        <h2>Platform Engineering &amp; Operations (Team SOUL)</h2>
+        <p style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2);">Division of Academic Affairs &amp; Estate Operations &bull; Lovely Professional University, Punjab</p>
+        <p style="font-weight: var(--font-semibold); font-size: var(--text-sm); margin-bottom: var(--space-2);">Core Engineering Team:</p>
+        <ul style="margin-left: var(--space-6); line-height: 1.8; font-size: var(--text-sm);">
+          <li><strong>Angel Seth</strong> (Registration No: <code>12611041</code>) &mdash; Systems UI/UX &amp; State Persistence</li>
+          <li><strong>Kartik</strong> (Registration No: <code>12612598</code>) &mdash; Availability Engine &amp; Conflict Algorithms</li>
+          <li><strong>Dhruv Anand</strong> (Registration No: <code>12619773</code>) &mdash; Dashboard Analytics &amp; Architecture</li>
+        </ul>
       </div>
     `;
   }

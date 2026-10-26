@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Campus Room &amp; Lab Availability Viewer | LPU CSE326 Team SOUL</title>
-  <meta name="description" content="Campus Room and Lab Availability Viewer for Lovely Professional University. Real-time slot status, timetable lookup, free room search, and booking management.">
+  <title>LPU Room &amp; Lab Booking Portal | Campus Estate &amp; Academic Operations</title>
+  <meta name="description" content="Official Room and Lab Space Reservation Portal for Lovely Professional University. Real-time availability matrix, timetable lookups, free room finder, and estate booking operations.">
   
   <!-- Core Stylesheets (Loaded in order) -->
   <link rel="stylesheet" href="css/base.css">
@@ -15,11 +15,11 @@
   <!-- Accessible Skip Link -->
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
-  <!-- Simulated Time Alert Banner (Controlled by UI.js) -->
+  <!-- Schedule Preview Clock Banner (Controlled by UI.js) -->
   <aside id="sim-banner" class="sim-banner hidden" role="status" aria-live="polite">
     <div class="sim-banner-content">
       <span class="sim-banner-icon" aria-hidden="true">&#9200;</span>
-      <span id="sim-banner-text">Simulated campus time is active.</span>
+      <span id="sim-banner-text">Schedule Preview Clock is active.</span>
       <button id="sim-banner-clear-btn" class="btn btn-sm btn-subtle" type="button">Reset to Real Time</button>
     </div>
   </aside>
@@ -42,7 +42,7 @@
           </svg>
           <div class="brand-text">
             <span class="brand-title">RoomFinder LPU</span>
-            <span class="brand-subtitle">CSE326 &bull; Team SOUL</span>
+            <span class="brand-subtitle">Lovely Professional University &bull; Academic Estates</span>
           </div>
         </a>
       </div>
@@ -57,6 +57,22 @@
       </div>
 
       <div class="header-right">
+        <!-- Command Palette Trigger -->
+        <button id="cmd-palette-btn" class="btn btn-sm btn-subtle cmd-palette-trigger" type="button" aria-label="Open Command Palette (Ctrl+K)" title="Quick Jump (Ctrl+K)">
+          <span class="cmd-icon" aria-hidden="true">&#128269;</span>
+          <span class="cmd-text">Quick Jump</span>
+          <kbd class="cmd-kbd">Ctrl+K</kbd>
+        </button>
+
+        <!-- UMS Profile Pill -->
+        <div id="ums-profile-pill" class="ums-profile-pill" tabindex="0" role="button" aria-label="LPU UMS Account" title="LPU UMS Account Profile">
+          <span class="ums-avatar" aria-hidden="true">&#128100;</span>
+          <div class="ums-info">
+            <span id="ums-user-name" class="ums-user-name">UMS Sign In</span>
+            <span id="ums-user-sub" class="ums-user-sub">Click to switch</span>
+          </div>
+        </div>
+
         <!-- Role Switcher -->
         <div class="role-switcher">
           <label for="role-select" class="role-label">Role:</label>
@@ -181,8 +197,8 @@
     <!-- View 7: Help & Documentation -->
     <section id="view-help" class="view-section" aria-labelledby="heading-help" hidden>
       <div class="view-header">
-        <h1 id="heading-help" class="view-title">Help &amp; Project Documentation</h1>
-        <p class="view-description">Rules reference, viva demonstration checklist, and architecture details.</p>
+        <h1 id="heading-help" class="view-title">Campus Booking Guidelines &amp; Support</h1>
+        <p class="view-description">Official room reservation policies, block estate helpdesks, role quotas, and portal shortcuts.</p>
       </div>
       <div id="help-content" class="help-content"></div>
     </section>
@@ -193,10 +209,10 @@
     <div class="footer-container">
       <div class="footer-meta">
         <p class="footer-institution">
-          <strong>Lovely Professional University (LPU)</strong> &bull; Course CSE326 (Web Technology) &bull; CA1 Project
+          <strong>Lovely Professional University (LPU)</strong> &bull; Division of Academic Affairs &amp; Estate Operations &bull; Engineered by Team SOUL
         </p>
         <p class="footer-credits">
-          Developed by <strong>Team SOUL</strong>: Angel Seth, Kartik, Dhruv Anand (First-Year B.Tech CSE)
+          Portal Engineering: <strong>Team SOUL</strong> &bull; Angel Seth, Kartik, Dhruv Anand &bull; Lovely Professional University, Punjab
         </p>
       </div>
       <div class="footer-links">

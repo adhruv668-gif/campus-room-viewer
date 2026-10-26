@@ -1119,6 +1119,103 @@ runTest('Backup Import: Normalizes legacy single-slot booking records', () => {
   assert.strictEqual(imported.endSlot, 3);
 });
 
+
+// ----------------------------------------------------
+// 8. ENTERPRISE TRANSFORMATION & INTEGRATION TESTS
+// ----------------------------------------------------
+console.log('\n--- 8. Enterprise Transformation & Integration Tests ---');
+
+runTest('Availability.suggestAlternatives(): Returns conflict-free alternative rooms prioritized by block/capacity', () => {
+  Store.resetToSample();
+  const testDate = getUpcomingFutureDate(5);
+  const targetRoomId = 'room-32-101';
+  const targetRoom = Rooms.getById(targetRoomId);
+  assert.ok(targetRoom, 'Target room must exist');
+
+  const alts = Availability.suggestAlternatives(targetRoomId, testDate, 2, 2, 50);
+  assert.ok(Array.isArray(alts), 'suggestAlternatives must return an array');
+  assert.ok(alts.length > 0, 'Must return at least 1 alternative room');
+
+  alts.forEach(alt => {
+    assert.notStrictEqual(alt.room.id, targetRoomId, 'Alternative must not be target room itself');
+    assert.strictEqual(alt.room.status, 'Active', 'Alternative must not be in maintenance');
+    const slotStatus = Availability.getSlotStatus(alt.room.id, testDate, 2);
+    assert.strictEqual(slotStatus.status, 'Free', 'Alternative room must be Free for the slot');
+  });
+
+  const topAlt = alts[0];
+  assert.ok(topAlt.score > 0, 'Top alternative should have a positive match score');
+  assert.ok(topAlt.reason.length > 0, 'Must provide an explanation reason for recommendation');
+});
+
+runTest('Utils.generateICSContent(): Generates valid RFC 5545 calendar invite string', () => {
+  Store.resetToSample();
+  const dummyBooking = {
+    id: 'test-ics-bk-1',
+    ref: 'BK-20261026-999',
+    roomId: 'room-32-101',
+    date: '2026-11-15',
+    startSlot: 2,
+    endSlot: 3,
+    requesterName: 'Angel Seth',
+    requesterId: '12611041',
+    requesterType: 'Student',
+    purpose: 'Capstone Project Review & Demo',
+    status: 'Approved'
+  };
+  const room = Rooms.getById('room-32-101');
+  assert.ok(room, 'Room must exist');
+
+  const ics = Utils.generateICSContent(dummyBooking, room);
+  assert.ok(typeof ics === 'string' && ics.length > 0, 'ICS content must be non-empty string');
+  assert.ok(ics.includes('BEGIN:VCALENDAR'), 'Must start VCALENDAR');
+  assert.ok(ics.includes('VERSION:2.0'), 'Must specify VERSION:2.0');
+  assert.ok(ics.includes('BEGIN:VEVENT'), 'Must contain VEVENT block');
+  assert.ok(ics.includes('UID:BK-20261026-999@lpu.in'), 'Must contain UID');
+  assert.ok(ics.includes('SUMMARY:LPU Space Reservation: Smart Classroom 101'), 'Must include formatted summary');
+  assert.ok(ics.includes('Lovely Professional University'), 'Must include campus location');
+  assert.ok(ics.includes('END:VEVENT'), 'Must close VEVENT');
+  assert.ok(ics.includes('END:VCALENDAR'), 'Must close VCALENDAR');
+});
+
+runTest('App UMS SSO: Stores, retrieves, and clears user session state without privilege leak', () => {
+  Store.init();
+  App.clearUmsUser();
+  assert.strictEqual(App.getUmsUser(), null, 'UMS user must initially be null');
+
+  const studentProfile = {
+    id: '12611041',
+    name: 'Angel Seth',
+    role: 'Student',
+    department: 'B.Tech CSE',
+    email: 'angel.12611041@lpu.in',
+    phone: '9876543210'
+  };
+  App.setUmsUser(studentProfile);
+
+  const activeUser = App.getUmsUser();
+  assert.ok(activeUser, 'Active UMS user profile must be retrievable');
+  assert.strictEqual(activeUser.id, '12611041');
+  assert.strictEqual(activeUser.name, 'Angel Seth');
+  assert.strictEqual(activeUser.role, 'Student');
+
+  assert.notStrictEqual(App.getCurrentRole(), Config.ROLES.ADMIN, 'Student UMS user must not have Admin role');
+
+  App.clearUmsUser();
+  assert.strictEqual(App.getUmsUser(), null, 'UMS user must be null after clearing');
+});
+
+runTest('Enterprise De-Academicization: Zero occurrences of Viva Examiner or CA1 Project in index.html', () => {
+  const indexPath = path.resolve(__dirname, '../index.html');
+  const indexHtml = fs.readFileSync(indexPath, 'utf-8');
+
+  assert.strictEqual(indexHtml.includes('Viva Examiner'), false, 'index.html must not contain "Viva Examiner"');
+  assert.strictEqual(indexHtml.includes('CA1 Project'), false, 'index.html must not contain "CA1 Project"');
+  assert.strictEqual(indexHtml.includes('CSE326'), false, 'index.html must not contain "CSE326"');
+  assert.ok(indexHtml.includes('LPU Room &amp; Lab Booking Portal') || indexHtml.includes('LPU Room & Lab Booking Portal'), 'index.html must contain rebranded title');
+  assert.ok(indexHtml.includes('Academic Estates'), 'index.html must contain enterprise branding');
+});
+
 console.log('\n====================================================');
 console.log(`TEST SUMMARY: ${passedTests} / ${totalTests} tests passed (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('====================================================\n');

@@ -466,9 +466,10 @@ const Bookings = {
     const lastRequester = settings.lastRequester || {};
 
     const state = {
-      status: 'All',
+      status: (initialFilters && initialFilters.status) || 'All',
       search: (initialFilters && initialFilters.search) || '',
       requesterId: isAdmin ? '' : (lastRequester.id || ''),
+      myUmsOnly: false,
       page: 1,
       pageSize: Config.PAGINATION.ITEMS_PER_PAGE
     };
@@ -476,6 +477,7 @@ const Bookings = {
     const self = this;
     const render = function() {
       const allBookings = self.getAll();
+      const umsUser = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
 
       // Filter by requester for non-admins
       let filtered = allBookings;
@@ -483,6 +485,13 @@ const Bookings = {
         filtered = filtered.filter(function(b) {
           if (!state.requesterId) return true;
           return b.requesterId.toUpperCase() === state.requesterId.toUpperCase();
+        });
+      }
+
+      // Filter by active UMS persona if selected
+      if (state.myUmsOnly && umsUser) {
+        filtered = filtered.filter(function(b) {
+          return b.requesterId.toUpperCase() === umsUser.id.toUpperCase();
         });
       }
 
@@ -534,6 +543,13 @@ const Bookings = {
         const cnt = counts[st] !== undefined ? counts[st] : 0;
         statusChips += `<button class="btn btn-sm ${activeClass} req-status-tab" data-status="${st}" type="button">${st} (${cnt})</button>`;
       });
+      if (umsUser) {
+        statusChips += `
+          <button id="req-my-ums-btn" class="btn btn-sm ${state.myUmsOnly ? 'btn-primary' : 'btn-subtle'}" type="button" style="margin-left: auto;">
+            &#128100; My Bookings (${Utils.escapeHTML(umsUser.name.split(' ')[0])})
+          </button>
+        `;
+      }
 
       // Table rows
       let rows = '';
@@ -592,6 +608,7 @@ const Bookings = {
             <td data-label="Actions" style="text-align: right;">
               <div style="display: inline-flex; gap: 4px;">
                 <button class="btn btn-sm btn-subtle view-details-btn" data-id="${Utils.escapeHTML(b.id)}" type="button">Details</button>
+                <button class="btn btn-sm btn-subtle req-ics-btn" data-id="${Utils.escapeHTML(b.id)}" type="button" title="Add to Calendar (.ics)">&#128197; .ics</button>
                 ${isAdmin && computed === 'Pending' ? `
                   <button class="btn btn-sm btn-accent req-approve-btn" data-id="${Utils.escapeHTML(b.id)}" type="button">Approve</button>
                   <button class="btn btn-sm btn-danger req-reject-btn" data-id="${Utils.escapeHTML(b.id)}" type="button">Reject</button>
@@ -737,6 +754,15 @@ const Bookings = {
           UI.showToast('Bookings CSV exported successfully.', 'success');
         });
       }
+
+      const myUmsBtn = containerEl.querySelector('#req-my-ums-btn');
+      if (myUmsBtn) {
+        myUmsBtn.addEventListener('click', function() {
+          state.myUmsOnly = !state.myUmsOnly;
+          state.page = 1;
+          render();
+        });
+      }
     };
 
     render();
@@ -746,6 +772,18 @@ const Bookings = {
       const detailsBtn = e.target.closest('.view-details-btn');
       if (detailsBtn) {
         self.renderBookingDetails(detailsBtn.getAttribute('data-id'));
+        return;
+      }
+
+      const icsBtn = e.target.closest('.req-ics-btn');
+      if (icsBtn) {
+        const id = icsBtn.getAttribute('data-id');
+        const b = self.getById(id);
+        if (b) {
+          const room = Rooms.getById(b.roomId);
+          Utils.exportToICS(b, room);
+          UI.showToast(`Calendar invite (.ics) generated for ${b.ref}.`, 'success');
+        }
         return;
       }
 
@@ -894,10 +932,93 @@ const Bookings = {
             ${historyLines}
           </ul>
         </div>
+
+        <div style="display: flex; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-color); flex-wrap: wrap;">
+          <button id="modal-ics-btn" class="btn btn-sm btn-secondary" type="button">
+            &#128197; Add to Calendar (.ics)
+          </button>
+          <button id="modal-print-pass-btn" class="btn btn-sm btn-primary" type="button">
+            &#128424; Print Reservation Pass
+          </button>
+        </div>
       </div>
     `;
 
     UI.showModal(`Booking Details: ${Utils.escapeHTML(b.ref)}`, bodyHtml, null, 'Close');
+
+    const modalEl = document.getElementById('app-modal');
+    if (modalEl) {
+      const icsBtn = modalEl.querySelector('#modal-ics-btn');
+      if (icsBtn) {
+        icsBtn.addEventListener('click', function() {
+          Utils.exportToICS(b, room);
+          UI.showToast(`Calendar invite exported for ${b.ref}.`, 'success');
+        });
+      }
+      const printBtn = modalEl.querySelector('#modal-print-pass-btn');
+      if (printBtn) {
+        printBtn.addEventListener('click', function() {
+          self.printReservationPass(b, room);
+        });
+      }
+    }
+  },
+
+  /**
+   * Generates and triggers printable official reservation pass.
+   * @param {object} booking
+   * @param {object} [room]
+   */
+  printReservationPass: function(booking, room) {
+    if (!booking) return;
+    const bldg = (room && typeof Rooms !== 'undefined' && Rooms.getBuildingById) ? Rooms.getBuildingById(room.buildingId) : null;
+    const bldgName = bldg ? bldg.name : 'University Academic Complex';
+    const timeSpan = Utils.formatSlotRange(booking.startSlot, booking.endSlot);
+
+    let container = document.getElementById('print-pass-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'print-pass-container';
+      container.className = 'print-pass-container';
+      document.body.appendChild(container);
+    }
+
+    container.innerHTML = `
+      <div class="print-pass-card">
+        <div class="print-pass-header">
+          <div class="print-uni-title">LOVELY PROFESSIONAL UNIVERSITY</div>
+          <div class="print-uni-sub">Division of Academic Affairs &amp; Campus Estate Operations</div>
+          <div class="print-pass-badge">OFFICIAL VENUE RESERVATION PASS</div>
+        </div>
+
+        <div class="print-pass-grid">
+          <div class="print-field"><span class="print-label">PASS REF:</span> <span class="print-val print-ref">${Utils.escapeHTML(booking.ref)}</span></div>
+          <div class="print-field"><span class="print-label">APPROVAL STATUS:</span> <span class="print-val">${Utils.escapeHTML(booking.status)}</span></div>
+          <div class="print-field"><span class="print-label">RESERVATION DATE:</span> <span class="print-val">${Utils.formatDate(booking.date)}</span></div>
+          <div class="print-field"><span class="print-label">SCHEDULED TIME:</span> <span class="print-val">${timeSpan}</span></div>
+          <div class="print-field"><span class="print-label">ASSIGNED ROOM:</span> <span class="print-val">${Utils.escapeHTML(room ? room.name : 'Classroom')} (Room ${Utils.escapeHTML(room ? room.roomNo : 'N/A')})</span></div>
+          <div class="print-field"><span class="print-label">CAMPUS BLOCK:</span> <span class="print-val">${Utils.escapeHTML(bldgName)}</span></div>
+          <div class="print-field"><span class="print-label">REQUESTER:</span> <span class="print-val">${Utils.escapeHTML(booking.requesterName)} (${Utils.escapeHTML(booking.requesterType)})</span></div>
+          <div class="print-field"><span class="print-label">LPU ID / UID:</span> <span class="print-val">${Utils.escapeHTML(booking.requesterId)}</span></div>
+          <div class="print-field full-width"><span class="print-label">PURPOSE:</span> <span class="print-val">${Utils.escapeHTML(booking.purpose)}</span></div>
+          <div class="print-field full-width"><span class="print-label">EXPECTED ATTENDEES:</span> <span class="print-val">${Utils.escapeHTML(String(booking.attendees))} Persons</span></div>
+        </div>
+
+        <div class="print-pass-footer">
+          <div class="print-qr-mock">
+            <div style="font-size: 1.8rem; line-height: 1;">&#9638;</div>
+            <span style="font-size: 9px; font-family: monospace;">VERIFIED SECURE PASS</span>
+          </div>
+          <div class="print-auth-box">
+            <div class="print-stamp-line">ESTATE OPERATIONS VALIDATION</div>
+            <div class="print-sign-title">Authorized Officer Stamp &amp; Signature</div>
+            <div class="print-gen-time">Generated: ${Utils.formatDate(new Date())} ${Utils.formatTime(new Date())}</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    window.print();
   },
 
   /**
@@ -911,16 +1032,17 @@ const Bookings = {
     const editBooking = isEdit ? this.getById(editBookingId) : null;
     const settings = Store.get('SETTINGS') || {};
     const lastRequester = settings.lastRequester || {};
+    const umsUser = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
 
     const activeRole = (typeof App !== 'undefined' && App.getCurrentRole) ? App.getCurrentRole() : Config.ROLES.STUDENT;
-    const initialType = (editBooking ? editBooking.requesterType : (activeRole === Config.ROLES.FACULTY ? 'Faculty' : 'Student'));
+    const initialType = (editBooking ? editBooking.requesterType : (umsUser ? (umsUser.role === 'Faculty' ? 'Faculty' : 'Student') : (activeRole === Config.ROLES.FACULTY ? 'Faculty' : 'Student')));
 
     const initialData = {
       requesterType: initialType,
-      requesterName: editBooking ? editBooking.requesterName : (lastRequester.name || ''),
-      requesterId: editBooking ? editBooking.requesterId : (lastRequester.id || ''),
-      email: editBooking ? editBooking.email : (lastRequester.email || ''),
-      phone: editBooking ? editBooking.phone : (lastRequester.phone || ''),
+      requesterName: editBooking ? editBooking.requesterName : ((umsUser && umsUser.name) || lastRequester.name || ''),
+      requesterId: editBooking ? editBooking.requesterId : ((umsUser && umsUser.id) || lastRequester.id || ''),
+      email: editBooking ? editBooking.email : ((umsUser && umsUser.email) || lastRequester.email || ''),
+      phone: editBooking ? editBooking.phone : ((umsUser && umsUser.phone) || lastRequester.phone || ''),
       roomId: editBooking ? editBooking.roomId : (prefill && prefill.roomId) || '',
       date: editBooking ? editBooking.date : (prefill && prefill.date) || Utils.getLocalDateString(Utils.getNow()),
       startSlot: editBooking ? editBooking.startSlot : (prefill && prefill.startSlot) || 1,
@@ -1176,7 +1298,40 @@ const Bookings = {
       const soft = conflicts.filter(function(c) { return c.type === 'pending'; });
 
       if (hard.length > 0) {
-        liveBox.innerHTML = `<span style="color: var(--color-danger);">&#10060; <strong>Hard Conflict:</strong> ${Utils.escapeHTML(hard[0].reason)}</span>`;
+        const attendeesEl = document.getElementById('req-attendees');
+        const attendeesCount = attendeesEl ? (parseInt(attendeesEl.value, 10) || 1) : 1;
+        const alternatives = (typeof Availability !== 'undefined' && Availability.suggestAlternatives) ?
+          Availability.suggestAlternatives(roomId, date, startSlot, endSlot, attendeesCount) : [];
+        let altHtml = '';
+        if (alternatives.length > 0) {
+          altHtml = `
+            <div style="margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px dashed var(--border-color); font-size: var(--text-xs);">
+              <div style="font-weight: var(--font-semibold); margin-bottom: 4px; color: var(--text-primary);">&#128161; Recommended Available Alternatives:</div>
+              <div style="display: flex; gap: var(--space-2); flex-wrap: wrap;">
+                ${alternatives.map(function(alt) {
+                  return `
+                    <button type="button" class="btn btn-sm btn-secondary switch-room-btn" data-room-id="${Utils.escapeHTML(alt.room.id)}" style="font-size: var(--text-xs); padding: 3px 8px;">
+                      Switch to Room ${Utils.escapeHTML(alt.room.roomNo)} (${Utils.escapeHTML(alt.room.type)}, ${alt.room.capacity} seats)
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }
+        liveBox.innerHTML = `<span style="color: var(--color-danger);">&#10060; <strong>Hard Conflict:</strong> ${Utils.escapeHTML(hard[0].reason)}</span>${altHtml}`;
+
+        const switchBtns = liveBox.querySelectorAll('.switch-room-btn');
+        switchBtns.forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            const newRoomId = btn.getAttribute('data-room-id');
+            if (roomSelect) {
+              roomSelect.value = newRoomId;
+              updateLiveSlotCheck();
+              UI.showToast(`Switched room selection to ${btn.textContent.trim()}.`, 'info');
+            }
+          });
+        });
       } else if (soft.length > 0) {
         liveBox.innerHTML = `<span style="color: var(--color-requested);">&#9888;&#65039; <strong>Notice:</strong> ${soft.length} other pending request(s) exist for this slot. Submission permitted; coordinator will decide.</span>`;
       } else {

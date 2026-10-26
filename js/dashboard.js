@@ -186,6 +186,9 @@ const Dashboard = {
       <!-- 2. KPI Summary Cards Grid -->
       ${this._renderKPIs(metrics, currentRole)}
 
+      <!-- 2b. Interactive Campus Block Architectural Map -->
+      ${this._renderInteractiveCampusMap(metrics)}
+
       <!-- 3. Occupancy & Utilization Visual Charts (2 Columns) -->
       <div class="grid-2col" style="margin-bottom: var(--space-6);">
         ${this._renderBuildingOccupancy(metrics)}
@@ -220,6 +223,166 @@ const Dashboard = {
         }
       });
     });
+
+    // Attach click events for interactive campus map nodes
+    const mapNodes = containerEl.querySelectorAll('.campus-map-block');
+    mapNodes.forEach(function(node) {
+      const bldgId = node.getAttribute('data-building-id');
+      const goToBuilding = function() {
+        if (bldgId) {
+          window.location.hash = `#/availability?building=${encodeURIComponent(bldgId)}`;
+        }
+      };
+      node.addEventListener('click', goToBuilding);
+      node.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          goToBuilding();
+        }
+      });
+    });
+  },
+
+  /**
+   * Generates interactive SVG and responsive campus map for Academic Blocks.
+   * Color codes by real-time load: <40% Emerald (optimal), 40-75% Amber (moderate), >75% Rose (high).
+   * @private
+   * @param {object} metrics
+   * @returns {string}
+   */
+  _renderInteractiveCampusMap: function(metrics) {
+    const allRooms = (typeof Rooms !== 'undefined' && Rooms.getAll) ? Rooms.getAll() : [];
+    const currentSlot = metrics.currentSlot;
+    const todayDate = metrics.todayDate;
+
+    const bldgNodes = metrics.buildingOccupancy.map(function(bldg, index) {
+      const bldgRooms = allRooms.filter(function(r) { return r.buildingId === bldg.id; });
+      let freeNow = 0;
+      let occupiedNow = 0;
+      let maintNow = 0;
+
+      bldgRooms.forEach(function(r) {
+        if (r.status === Config.ROOM_STATUS.MAINTENANCE) {
+          maintNow++;
+        } else if (currentSlot !== null) {
+          const st = Availability.getSlotStatus(r.id, todayDate, currentSlot).status;
+          if (st === 'Free') freeNow++;
+          else if (st === 'Class' || st === 'Booked') occupiedNow++;
+        } else {
+          freeNow++;
+        }
+      });
+
+      let statusColor = '#10b981';
+      let statusBadge = 'Optimal (<40%)';
+      let statusBg = 'rgba(16, 185, 129, 0.12)';
+      if (bldg.percent > 75) {
+        statusColor = '#ef4444';
+        statusBadge = 'High Load (>75%)';
+        statusBg = 'rgba(239, 68, 68, 0.12)';
+      } else if (bldg.percent >= 40) {
+        statusColor = '#f59e0b';
+        statusBadge = 'Moderate (40-75%)';
+        statusBg = 'rgba(245, 158, 11, 0.12)';
+      }
+
+      const x = 20 + index * 215;
+
+      return {
+        id: bldg.id,
+        code: bldg.code,
+        name: bldg.name,
+        total: bldgRooms.length,
+        freeNow: freeNow,
+        occupiedNow: occupiedNow,
+        maintNow: maintNow,
+        percent: bldg.percent,
+        color: statusColor,
+        badge: statusBadge,
+        bg: statusBg,
+        x: x
+      };
+    });
+
+    let svgBlocks = '';
+    let cardsHtml = '';
+
+    bldgNodes.forEach(function(b) {
+      // SVG Group
+      svgBlocks += `
+        <g class="campus-map-block" data-building-id="${Utils.escapeHTML(b.id)}" role="button" tabindex="0" style="cursor: pointer;">
+          <rect x="${b.x}" y="20" width="200" height="190" rx="10" ry="10" fill="var(--bg-surface)" stroke="${b.color}" stroke-width="2" class="map-node-rect" />
+          <rect x="${b.x}" y="20" width="200" height="38" rx="10" ry="10" fill="${b.color}" opacity="0.15" />
+          <text x="${b.x + 12}" y="44" font-size="14" font-weight="bold" fill="var(--text-primary)">${Utils.escapeHTML(b.code)}</text>
+          <text x="${b.x + 188}" y="44" font-size="11" font-weight="bold" text-anchor="end" fill="${b.color}">${b.percent}% Load</text>
+          <text x="${b.x + 12}" y="74" font-size="11" fill="var(--text-secondary)">${Utils.escapeHTML(b.name.split(' - ')[0])}</text>
+          <line x1="${b.x + 12}" y1="86" x2="${b.x + 188}" y2="86" stroke="var(--border-subtle)" stroke-width="1" />
+          <text x="${b.x + 12}" y="110" font-size="12" fill="var(--text-primary)">Total Rooms: <tspan font-weight="bold">${b.total}</tspan></text>
+          <text x="${b.x + 12}" y="132" font-size="12" fill="#10b981">Free Now: <tspan font-weight="bold">${b.freeNow}</tspan></text>
+          <text x="${b.x + 105}" y="132" font-size="12" fill="var(--text-secondary)">Busy: <tspan font-weight="bold">${b.occupiedNow}</tspan></text>
+          <text x="${b.x + 12}" y="154" font-size="11" fill="var(--color-danger)">Maintenance: <tspan font-weight="bold">${b.maintNow}</tspan></text>
+          <rect x="${b.x + 12}" y="168" width="176" height="28" rx="6" ry="6" fill="var(--color-primary-bg)" stroke="var(--color-primary)" stroke-width="1" opacity="0.9" />
+          <text x="${b.x + 100}" y="186" font-size="11" font-weight="bold" fill="var(--color-primary)" text-anchor="middle">View Block Schedule &rarr;</text>
+        </g>
+      `;
+
+      // Companion responsive card (for accessibility & mobile devices)
+      cardsHtml += `
+        <div class="campus-map-card campus-map-block" data-building-id="${Utils.escapeHTML(b.id)}" role="button" tabindex="0" style="border-top: 4px solid ${b.color}; cursor: pointer;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-2);">
+            <div>
+              <div style="font-weight: var(--font-bold); font-size: var(--text-base);">${Utils.escapeHTML(b.code)}</div>
+              <div style="font-size: var(--text-xs); color: var(--text-secondary);">${Utils.escapeHTML(b.name)}</div>
+            </div>
+            <span class="badge" style="background-color: ${b.bg}; color: ${b.color}; border: 1px solid ${b.color}; font-weight: bold;">${b.percent}% Load</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1); font-size: var(--text-xs); margin-bottom: var(--space-3);">
+            <div>Total: <strong>${b.total}</strong> Rooms</div>
+            <div>Free Now: <strong style="color: #10b981;">${b.freeNow}</strong></div>
+            <div>Occupied: <strong>${b.occupiedNow}</strong></div>
+            <div>Maint: <strong style="color: var(--color-danger);">${b.maintNow}</strong></div>
+          </div>
+          <div style="text-align: right; font-size: var(--text-xs); font-weight: var(--font-bold); color: var(--color-primary);">
+            Explore Schedule &rarr;
+          </div>
+        </div>
+      `;
+    });
+
+    return `
+      <div class="card" style="margin-bottom: var(--space-6);">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); flex-wrap: wrap; gap: var(--space-2);">
+          <div>
+            <h3 style="font-size: var(--text-base); font-weight: var(--font-bold); margin: 0;">Interactive Campus Block Map &amp; Real-Time Heatmap</h3>
+            <p style="font-size: var(--text-xs); color: var(--text-secondary); margin: var(--space-1) 0 0 0;">
+              Architectural block layout with dynamic load badges. Click any block node to filter the availability schedule.
+            </p>
+          </div>
+          <div style="display: flex; gap: var(--space-2); font-size: var(--text-xs); align-items: center; flex-wrap: wrap;">
+            <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span> &lt;40% Optimal</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></span> 40-75% Moderate</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444;"></span> &gt;75% High Load</span>
+          </div>
+        </header>
+
+        <!-- SVG Visual Layout for Large Displays -->
+        <div class="campus-map-svg-wrapper" style="overflow-x: auto; margin-bottom: var(--space-3); padding-bottom: var(--space-2);">
+          <svg viewBox="0 0 880 230" class="campus-map-svg" style="width: 100%; min-width: 820px; height: auto;" aria-label="Campus Building Interactive Map">
+            <!-- Interconnecting Campus Promenade -->
+            <path d="M 120 115 L 770 115" stroke="var(--border-subtle)" stroke-width="6" stroke-dasharray="8 6" opacity="0.6" />
+            <path d="M 220 115 L 240 115" stroke="var(--color-primary)" stroke-width="3" />
+            <path d="M 440 115 L 460 115" stroke="var(--color-primary)" stroke-width="3" />
+            <path d="M 660 115 L 680 115" stroke="var(--color-primary)" stroke-width="3" />
+            ${svgBlocks}
+          </svg>
+        </div>
+
+        <!-- Responsive Card Grid -->
+        <div class="campus-map-cards-grid grid-4col" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3);">
+          ${cardsHtml}
+        </div>
+      </div>
+    `;
   },
 
   /**

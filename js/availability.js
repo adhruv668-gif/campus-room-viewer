@@ -279,6 +279,83 @@ const Availability = {
   },
 
   /**
+   * Suggests top 3 available alternative rooms for a conflicted slot range.
+   * Prioritizes: (1) Same building, (2) Same room type, (3) Adequate capacity.
+   * @param {string} roomId
+   * @param {string} dateStr
+   * @param {number} startSlot
+   * @param {number} endSlot
+   * @param {number} [minCapacity=1]
+   * @returns {Array<{ room: object, building: object|null, score: number, reason: string }>}
+   */
+  suggestAlternatives: function(roomId, dateStr, startSlot, endSlot, minCapacity) {
+    const targetRoom = Rooms.getById(roomId);
+    const targetBuildingId = targetRoom ? targetRoom.buildingId : null;
+    const targetType = targetRoom ? targetRoom.type : null;
+    const requiredCap = minCapacity || (targetRoom ? targetRoom.capacity : 1);
+
+    const allRooms = Rooms.getAll();
+    const candidates = [];
+
+    allRooms.forEach(function(room) {
+      if (room.id === roomId) return;
+      if (room.status === Config.ROOM_STATUS.MAINTENANCE) return;
+
+      const conflicts = Availability.findConflicts(room.id, dateStr, startSlot, endSlot);
+      const hasHardConflict = conflicts.some(function(c) {
+        return c.type === 'maintenance' || c.type === 'class' || c.type === 'approved';
+      });
+
+      if (!hasHardConflict) {
+        let score = 0;
+        const reasons = [];
+
+        // 1. Same building bonus
+        if (targetBuildingId && room.buildingId === targetBuildingId) {
+          score += 100;
+          reasons.push('Same Block');
+        }
+
+        // 2. Same room type bonus
+        if (targetType && room.type === targetType) {
+          score += 50;
+          reasons.push(room.type);
+        }
+
+        // 3. Capacity suitability
+        if (room.capacity >= requiredCap) {
+          score += 40;
+          const diff = room.capacity - requiredCap;
+          score += Math.max(0, 20 - Math.floor(diff / 5));
+          reasons.push(`${room.capacity} seats`);
+        } else {
+          score += Math.max(0, 10 - Math.floor((requiredCap - room.capacity) / 5));
+        }
+
+        // Soft conflict penalty
+        const softConflicts = conflicts.filter(function(c) { return c.type === 'pending'; });
+        if (softConflicts.length > 0) {
+          score -= (softConflicts.length * 15);
+        } else {
+          score += 20;
+          reasons.push('Completely Free');
+        }
+
+        const bldg = Rooms.getBuildingById(room.buildingId);
+        candidates.push({
+          room: room,
+          building: bldg,
+          score: score,
+          reason: reasons.join(' • ')
+        });
+      }
+    });
+
+    candidates.sort(function(a, b) { return b.score - a.score; });
+    return candidates.slice(0, 3);
+  },
+
+  /**
    * Renders the interactive Availability Explorer grid with building groups and filters.
    * @param {HTMLElement} containerEl
    * @param {object} [filterOverrides={}]
@@ -784,6 +861,33 @@ const Availability = {
       `;
     }
 
+    // Smart Alternative Room Recommendations if slot is occupied or requested
+    if (slotInfo.status !== 'Free') {
+      const alternatives = this.suggestAlternatives(roomId, dateStr, slotNumber, slotNumber, 1);
+      if (alternatives.length > 0) {
+        bodyHtml += `
+          <div style="margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px dashed var(--border-color);">
+            <h4 style="font-size: var(--text-sm); margin-bottom: var(--space-2); color: var(--text-primary);">&#128161; Available Alternative Rooms for Slot ${slotNumber}:</h4>
+            <div style="display: flex; flex-direction: column; gap: var(--space-2);">
+              ${alternatives.map(function(alt) {
+                return `
+                  <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); border: 1px solid var(--border-color); gap: var(--space-2); flex-wrap: wrap;">
+                    <div>
+                      <strong>Room ${Utils.escapeHTML(alt.room.roomNo)}</strong> &bull; ${Utils.escapeHTML(alt.room.name)}
+                      <div style="font-size: var(--text-xs); color: var(--text-muted);">${Utils.escapeHTML(alt.reason)}</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary slot-alt-book-btn" data-room-id="${Utils.escapeHTML(alt.room.id)}" style="font-size: var(--text-xs); padding: 4px 8px;">
+                      Book Room ${Utils.escapeHTML(alt.room.roomNo)}
+                    </button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+    }
+
     // Modal action buttons
     const now = Utils.getNow();
     const todayStr = Utils.getLocalDateString(now);
@@ -797,6 +901,18 @@ const Availability = {
     } : null;
 
     UI.showModal(`Room ${Utils.escapeHTML(room.roomNo)} - Slot ${slotNumber} Inspection`, bodyHtml, onConfirmAction, 'Request This Slot');
+
+    const modalEl = document.getElementById('app-modal');
+    if (modalEl) {
+      const altBtns = modalEl.querySelectorAll('.slot-alt-book-btn');
+      altBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const targetRoomId = btn.getAttribute('data-room-id');
+          UI.closeModal();
+          window.location.hash = `#/request?roomId=${encodeURIComponent(targetRoomId)}&date=${encodeURIComponent(dateStr)}&startSlot=${slotNumber}&endSlot=${slotNumber}`;
+        });
+      });
+    }
   },
 
   /**

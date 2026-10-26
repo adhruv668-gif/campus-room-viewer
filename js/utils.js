@@ -275,5 +275,88 @@ const Utils = {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  },
+
+  /**
+   * Generates standard RFC 5545 iCalendar (.ics) string for a room reservation.
+   * @param {object} booking
+   * @param {object} [room]
+   * @returns {string}
+   */
+  generateICSContent: function(booking, room) {
+    if (!booking) return '';
+
+    const roomLabel = room ? `${room.name} (Room ${room.roomNo})` : 'LPU Campus Room';
+    const bldg = (room && typeof Rooms !== 'undefined' && Rooms.getBuildingById) ? Rooms.getBuildingById(room.buildingId) : null;
+    const locationStr = bldg ? `${bldg.name}, Lovely Professional University, Punjab` : 'Lovely Professional University, Phagwara, Punjab 144411';
+
+    const slotList = (typeof Config !== 'undefined' && Config.SLOTS) ? Config.SLOTS : [];
+    const startDef = slotList.find(function(s) { return s.id === (booking.startSlot || 1); }) || { startHour: 9, startMin: 0 };
+    const endDef = slotList.find(function(s) { return s.id === (booking.endSlot || booking.startSlot || 1); }) || { endHour: 10, endMin: 0 };
+
+    const dateDigits = (booking.date || '2026-01-01').replace(/-/g, '');
+    const sH = String(startDef.startHour || 9).padStart(2, '0');
+    const sM = String(startDef.startMin || 0).padStart(2, '0');
+    const eH = String(endDef.endHour || 10).padStart(2, '0');
+    const eM = String(endDef.endMin || 0).padStart(2, '0');
+
+    const dtStart = `${dateDigits}T${sH}${sM}00`;
+    const dtEnd = `${dateDigits}T${eH}${eM}00`;
+    const now = new Date();
+    const dtStamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+    const escapeICS = function(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, '\\n');
+    };
+
+    const ref = booking.ref || 'RESERVATION';
+    const summary = escapeICS(`LPU Space Reservation: ${roomLabel} [${ref}]`);
+    const location = escapeICS(locationStr);
+    const description = escapeICS(`Reservation Reference: ${ref}\nRoom: ${roomLabel}\nRequester: ${booking.requesterName || 'Campus User'} (${booking.requesterId || 'N/A'})\nPurpose: ${booking.purpose || 'Academic Session'}\nStatus: ${booking.status || 'Confirmed'}`);
+
+    return [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Lovely Professional University//LPU Space Management Portal//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${ref}@lpu.in`,
+      `DTSTAMP:${dtStamp}`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:${summary}`,
+      `LOCATION:${location}`,
+      `DESCRIPTION:${description}`,
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+  },
+
+  /**
+   * Triggers client-side download of an RFC 5545 iCalendar event (.ics).
+   * @param {object} booking
+   * @param {object} [room]
+   */
+  exportToICS: function(booking, room) {
+    const icsContent = this.generateICSContent(booking, room);
+    if (!icsContent) return;
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `LPU-Reservation-${booking.ref || 'event'}.ics`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 };

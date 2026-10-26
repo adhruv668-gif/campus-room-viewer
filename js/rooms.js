@@ -953,7 +953,7 @@ const Rooms = {
             </div>
             <div class="form-group">
               <label for="tt-add-course" class="form-label form-label-required">Course Code &amp; Title</label>
-              <input type="text" id="tt-add-course" class="form-input" placeholder="e.g. CSE326 Web Technology" required />
+              <input type="text" id="tt-add-course" class="form-input" placeholder="e.g. CAP782 Advanced Cloud Computing" required />
             </div>
             <div class="grid-2col">
               <div class="form-group">
@@ -1035,16 +1035,16 @@ const Rooms = {
 
     containerEl.innerHTML = `
       <div class="grid-2col">
-        <!-- Panel 1: Simulation Clock Control -->
+        <!-- Panel 1: Schedule Preview Clock Control -->
         <div class="card">
-          <h3>Simulated Campus Clock</h3>
-          <p class="form-hint">Freeze or advance the virtual campus time to test slot transitions, viva scenarios, or after-hours states.</p>
+          <h3>Schedule Preview Clock</h3>
+          <p class="form-hint">Preview future or off-peak campus time to inspect slot transitions, operational readiness, and after-hours availability.</p>
           <div class="form-group" style="margin-top: var(--space-3);">
-            <label for="sim-date-input" class="form-label">Simulate Date &amp; Time:</label>
+            <label for="sim-date-input" class="form-label">Preview Date &amp; Time:</label>
             <input type="datetime-local" id="sim-date-input" class="form-input" value="${settings.simulatedNow || ''}" />
           </div>
           <div style="display: flex; gap: var(--space-2); margin-top: var(--space-3);">
-            <button id="sim-set-btn" class="btn btn-primary" type="button">Freeze Time</button>
+            <button id="sim-set-btn" class="btn btn-primary" type="button">Set Preview Clock</button>
             <button id="sim-reset-btn" class="btn btn-secondary" type="button">Reset to Real Time</button>
           </div>
         </div>
