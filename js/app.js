@@ -114,24 +114,7 @@ const App = {
       });
     }
 
-    // 5b. Initialize UMS Profile Pill
-    this.updateUmsNavbarPill();
-    const umsPill = document.getElementById('ums-profile-pill');
-    if (umsPill) {
-      umsPill.addEventListener('click', function() {
-        if (typeof UI !== 'undefined' && UI.showUmsLoginModal) {
-          UI.showUmsLoginModal();
-        }
-      });
-      umsPill.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          if (typeof UI !== 'undefined' && UI.showUmsLoginModal) {
-            UI.showUmsLoginModal();
-          }
-        }
-      });
-    }
+
 
     // 5c. Initialize Command Palette Trigger
     const cmdBtn = document.getElementById('cmd-palette-btn');
@@ -273,6 +256,31 @@ const App = {
     }
 
     settings.role = newRole;
+    if (newRole === Config.ROLES.STUDENT) {
+      settings.lastRequester = {
+        type: 'Student',
+        name: 'Angel Seth',
+        id: '12611041',
+        email: 'angel.12611041@campus.edu',
+        phone: '9876543210'
+      };
+    } else if (newRole === Config.ROLES.FACULTY) {
+      settings.lastRequester = {
+        type: 'Faculty',
+        name: 'Dr. Rajesh Kumar',
+        id: 'FAC1001',
+        email: 'rajesh.fac1001@campus.edu',
+        phone: '9876543211'
+      };
+    } else if (newRole === Config.ROLES.ADMIN) {
+      settings.lastRequester = {
+        type: 'Admin',
+        name: 'Estate Coordinator',
+        id: 'ADMIN',
+        email: 'estates@campus.edu',
+        phone: '9876543212'
+      };
+    }
     const persisted = Store.set('SETTINGS', settings);
 
     const roleSelect = document.getElementById('role-select');
@@ -357,7 +365,7 @@ const App = {
         type: userObj.role || 'Student',
         name: userObj.name,
         id: userObj.id,
-        email: userObj.email || `${userObj.id}@lpu.in`,
+        email: userObj.email || `${userObj.id}@campus.edu`,
         phone: userObj.phone || '9876543210'
       };
     } else {
@@ -365,7 +373,7 @@ const App = {
         type: 'Student',
         name: 'Angel Seth',
         id: '12611041',
-        email: 'angel.12611041@lpu.in',
+        email: 'angel.12611041@campus.edu',
         phone: '9876543210'
       };
     }
@@ -410,7 +418,7 @@ const App = {
       pill.classList.remove('signed-in');
       if (nameEl) nameEl.textContent = 'UMS Sign In';
       if (subEl) subEl.textContent = 'Click to switch';
-      pill.setAttribute('title', 'LPU UMS Account Profile - Click to sign in');
+      pill.setAttribute('title', 'Campus User Profile');
     }
   },
 
@@ -601,7 +609,7 @@ const App = {
       </div>
 
       <div class="card" style="margin-bottom: var(--space-6);">
-        <h2>LPU Block Estates &amp; Technical Helpdesk Directory</h2>
+        <h2>Campus Block Estates &amp; Technical Helpdesk Directory</h2>
         <p class="form-hint" style="margin-bottom: var(--space-3);">For immediate classroom assistance, smart-board troubleshooting, or key dispatch, contact your designated block estate coordinator:</p>
         <div style="overflow-x: auto;">
           <table class="data-table" style="font-size: var(--text-xs);">
@@ -646,7 +654,7 @@ const App = {
             </tbody>
           </table>
         </div>
-        <p class="form-hint" style="margin-top: var(--space-3);"><strong>Central Emergency Escalation:</strong> For urgent audio-visual, HVAC, or power emergencies during live class sessions, contact Central Estate Control: <code>01824-510000</code> or <code>estate.support@lpu.in</code>.</p>
+        <p class="form-hint" style="margin-top: var(--space-3);"><strong>Central Emergency Escalation:</strong> For urgent audio-visual, HVAC, or power emergencies during live class sessions, contact Central Estate Control: <code>helpdesk@campus.edu</code>.</p>
       </div>
 
       <div class="card" style="margin-bottom: var(--space-6);">

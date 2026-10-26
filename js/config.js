@@ -14,10 +14,9 @@
 
 const Config = {
   // Application metadata
-  APP_NAME: 'LPU Space & Lab Management Portal',
-  INSTITUTION: 'Lovely Professional University (LPU)',
-  DIVISION: 'Division of Academic Affairs & Estate Operations',
-  COURSE: 'CSE326 - Web Technology',
+  APP_NAME: 'CampusSpace — Classroom & Lab Availability Portal',
+  INSTITUTION: 'CampusSpace',
+  DIVISION: 'Campus Estates & Academic Operations',
   TEAM: 'SOUL',
   SCHEMA_VERSION: '1.0',
 

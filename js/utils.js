@@ -286,9 +286,9 @@ const Utils = {
   generateICSContent: function(booking, room) {
     if (!booking) return '';
 
-    const roomLabel = room ? `${room.name} (Room ${room.roomNo})` : 'LPU Campus Room';
+    const roomLabel = room ? `${room.name} (Room ${room.roomNo})` : 'Campus Room';
     const bldg = (room && typeof Rooms !== 'undefined' && Rooms.getBuildingById) ? Rooms.getBuildingById(room.buildingId) : null;
-    const locationStr = bldg ? `${bldg.name}, Lovely Professional University, Punjab` : 'Lovely Professional University, Phagwara, Punjab 144411';
+    const locationStr = bldg ? `${bldg.name}, CampusSpace` : 'CampusSpace Academic Portal';
 
     const slotList = (typeof Config !== 'undefined' && Config.SLOTS) ? Config.SLOTS : [];
     const startDef = slotList.find(function(s) { return s.id === (booking.startSlot || 1); }) || { startHour: 9, startMin: 0 };
@@ -315,18 +315,18 @@ const Utils = {
     };
 
     const ref = booking.ref || 'RESERVATION';
-    const summary = escapeICS(`LPU Space Reservation: ${roomLabel} [${ref}]`);
+    const summary = escapeICS(`Campus Reservation: ${roomLabel} [${ref}]`);
     const location = escapeICS(locationStr);
     const description = escapeICS(`Reservation Reference: ${ref}\nRoom: ${roomLabel}\nRequester: ${booking.requesterName || 'Campus User'} (${booking.requesterId || 'N/A'})\nPurpose: ${booking.purpose || 'Academic Session'}\nStatus: ${booking.status || 'Confirmed'}`);
 
     return [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//Lovely Professional University//LPU Space Management Portal//EN',
+      'PRODID:-//CampusSpace//Campus Space Management Portal//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'BEGIN:VEVENT',
-      `UID:${ref}@lpu.in`,
+      `UID:${ref}@campus.edu`,
       `DTSTAMP:${dtStamp}`,
       `DTSTART:${dtStart}`,
       `DTEND:${dtEnd}`,
@@ -352,7 +352,7 @@ const Utils = {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `LPU-Reservation-${booking.ref || 'event'}.ics`);
+    link.setAttribute('download', `Campus-Reservation-${booking.ref || 'event'}.ics`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();

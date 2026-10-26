@@ -370,7 +370,7 @@ runTest('Bookings.updatePendingBooking(): Edits request without self-conflict on
     requesterId: '12699991',
     requesterType: 'Student',
     attendees: 20,
-    email: 'selfconflict@lpu.in',
+    email: 'selfconflict@campus.edu',
     purpose: 'Initial request before editing',
     declaration: true
   });
@@ -387,7 +387,7 @@ runTest('Bookings.updatePendingBooking(): Edits request without self-conflict on
     requesterId: '12699991',
     requesterType: 'Student',
     attendees: 22,
-    email: 'selfconflict@lpu.in',
+    email: 'selfconflict@campus.edu',
     purpose: 'Updated purpose details without slot change',
     declaration: true
   });
@@ -424,7 +424,7 @@ runTest('Quota Calculation: Student cannot exceed 3 active upcoming requests', (
     requesterId: studentId,
     requesterType: 'Student',
     attendees: 10,
-    email: 'tester@lpu.in',
+    email: 'tester@campus.edu',
     purpose: 'Exceeding quota test purpose',
     declaration: true
   });
@@ -494,7 +494,7 @@ runTest('Quota Calculation: Completed bookings earlier today do NOT count agains
     requesterId: studentId,
     requesterType: 'Student',
     attendees: 15,
-    email: 'testerpass@lpu.in',
+    email: 'testerpass@campus.edu',
     purpose: 'Testing ended slot exclusion from quota',
     declaration: true
   });
@@ -644,7 +644,7 @@ runTest('Bookings.createBooking(): Fails gracefully when Store.addItem fails', (
     requesterId: '12677777',
     requesterType: 'Student',
     attendees: 10,
-    email: 'fail@lpu.in',
+    email: 'fail@campus.edu',
     purpose: 'Testing persistence failure handling',
     declaration: true
   });
@@ -696,7 +696,7 @@ runTest('Bookings.createBooking(): Rolls back newly added booking when SETTINGS 
     requesterId: studentId,
     requesterType: 'Student',
     attendees: 10,
-    email: 'settingsfail@lpu.in',
+    email: 'settingsfail@campus.edu',
     purpose: 'Testing settings failure rollback',
     declaration: true
   });
@@ -1171,38 +1171,38 @@ runTest('Utils.generateICSContent(): Generates valid RFC 5545 calendar invite st
   assert.ok(ics.includes('BEGIN:VCALENDAR'), 'Must start VCALENDAR');
   assert.ok(ics.includes('VERSION:2.0'), 'Must specify VERSION:2.0');
   assert.ok(ics.includes('BEGIN:VEVENT'), 'Must contain VEVENT block');
-  assert.ok(ics.includes('UID:BK-20261026-999@lpu.in'), 'Must contain UID');
-  assert.ok(ics.includes('SUMMARY:LPU Space Reservation: Smart Classroom 101'), 'Must include formatted summary');
-  assert.ok(ics.includes('Lovely Professional University'), 'Must include campus location');
+  assert.ok(ics.includes('UID:BK-20261026-999@campus.edu'), 'Must contain UID');
+  assert.ok(ics.includes('SUMMARY:Campus Reservation: Smart Classroom 101'), 'Must include formatted summary');
+  assert.ok(ics.includes('CampusSpace'), 'Must include campus location');
   assert.ok(ics.includes('END:VEVENT'), 'Must close VEVENT');
   assert.ok(ics.includes('END:VCALENDAR'), 'Must close VCALENDAR');
 });
 
-runTest('App UMS SSO: Stores, retrieves, and clears user session state without privilege leak', () => {
+runTest('App User Session: Stores, retrieves, and clears user session state without privilege leak', () => {
   Store.init();
   App.clearUmsUser();
-  assert.strictEqual(App.getUmsUser(), null, 'UMS user must initially be null');
+  assert.strictEqual(App.getUmsUser(), null, 'User session must initially be null');
 
   const studentProfile = {
     id: '12611041',
     name: 'Angel Seth',
     role: 'Student',
     department: 'B.Tech CSE',
-    email: 'angel.12611041@lpu.in',
+    email: 'angel.12611041@campus.edu',
     phone: '9876543210'
   };
   App.setUmsUser(studentProfile);
 
   const activeUser = App.getUmsUser();
-  assert.ok(activeUser, 'Active UMS user profile must be retrievable');
+  assert.ok(activeUser, 'Active user profile must be retrievable');
   assert.strictEqual(activeUser.id, '12611041');
   assert.strictEqual(activeUser.name, 'Angel Seth');
   assert.strictEqual(activeUser.role, 'Student');
 
-  assert.notStrictEqual(App.getCurrentRole(), Config.ROLES.ADMIN, 'Student UMS user must not have Admin role');
+  assert.notStrictEqual(App.getCurrentRole(), Config.ROLES.ADMIN, 'Student user must not have Admin role');
 
   App.clearUmsUser();
-  assert.strictEqual(App.getUmsUser(), null, 'UMS user must be null after clearing');
+  assert.strictEqual(App.getUmsUser(), null, 'User must be null after clearing');
 });
 
 runTest('Enterprise De-Academicization: Zero occurrences of Viva Examiner or CA1 Project in index.html', () => {
@@ -1212,8 +1212,7 @@ runTest('Enterprise De-Academicization: Zero occurrences of Viva Examiner or CA1
   assert.strictEqual(indexHtml.includes('Viva Examiner'), false, 'index.html must not contain "Viva Examiner"');
   assert.strictEqual(indexHtml.includes('CA1 Project'), false, 'index.html must not contain "CA1 Project"');
   assert.strictEqual(indexHtml.includes('CSE326'), false, 'index.html must not contain "CSE326"');
-  assert.ok(indexHtml.includes('LPU Room &amp; Lab Booking Portal') || indexHtml.includes('LPU Room & Lab Booking Portal'), 'index.html must contain rebranded title');
-  assert.ok(indexHtml.includes('Academic Estates'), 'index.html must contain enterprise branding');
+  assert.ok(indexHtml.includes('CampusSpace') && (indexHtml.includes('Classroom &amp; Lab Availability Portal') || indexHtml.includes('Classroom & Lab Availability Portal')), 'index.html must contain rebranded title');
 });
 
 runTest('Availability.getFreeDuration(): Computes consecutive free slots, countdown text, and next class event', () => {

@@ -423,238 +423,23 @@ const UI = {
   },
 
   /**
-   * Opens LPU UMS SSO authentication modal with quick-switch profile cards.
+   * Helper to focus the role switcher in the header for fast persona switching.
+   */
+  showRoleSwitcher: function() {
+    const sel = document.getElementById('role-select');
+    if (sel) {
+      sel.focus();
+      if (sel.showPicker) {
+        try { sel.showPicker(); } catch (e) {}
+      }
+    }
+  },
+
+  /**
+   * Backward-compatible stub for legacy calls.
    */
   showUmsLoginModal: function() {
-    const activeUser = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
-
-    const quickProfiles = [
-      {
-        id: '12611041',
-        name: 'Angel Seth',
-        role: 'Student',
-        dept: 'B.Tech CSE (First Year)',
-        email: 'angel.12611041@lpu.in',
-        phone: '9876543210',
-        badge: 'Student'
-      },
-      {
-        id: '12612598',
-        name: 'Kartik',
-        role: 'Student',
-        dept: 'B.Tech CSE (First Year)',
-        email: 'kartik.12612598@lpu.in',
-        phone: '9876543211',
-        badge: 'Student'
-      },
-      {
-        id: '12619773',
-        name: 'Dhruv Anand',
-        role: 'Student',
-        dept: 'B.Tech CSE (First Year)',
-        email: 'dhruv.12619773@lpu.in',
-        phone: '9876543212',
-        badge: 'Student'
-      },
-      {
-        id: 'FAC1024',
-        name: 'Dr. Rajesh Sharma',
-        role: 'Faculty',
-        dept: 'School of CSE & Artificial Intelligence',
-        email: 'rajesh.fac1024@lpu.co.in',
-        phone: '9876543213',
-        badge: 'Faculty'
-      },
-      {
-        id: 'ADMIN',
-        name: 'Estate Administrator',
-        role: 'Admin',
-        dept: 'Campus Estates & Operations Control',
-        email: 'estates@lpu.in',
-        phone: '01824-510000',
-        badge: 'Admin'
-      }
-    ];
-
-    let profilesHtml = '';
-    quickProfiles.forEach(function(p) {
-      const isCurrent = activeUser && activeUser.id === p.id;
-      profilesHtml += `
-        <div class="ums-profile-card ${isCurrent ? 'is-active' : ''}" data-profile-id="${Utils.escapeHTML(p.id)}" role="button" tabindex="0">
-          <div class="ums-card-header">
-            <span class="ums-card-avatar">${p.role === 'Admin' ? '&#128272;' : (p.role === 'Faculty' ? '&#127891;' : '&#128100;')}</span>
-            <div class="ums-card-details">
-              <div class="ums-card-name">${Utils.escapeHTML(p.name)}</div>
-              <div class="ums-card-id">${Utils.escapeHTML(p.id)} &bull; ${Utils.escapeHTML(p.dept)}</div>
-            </div>
-            <span class="badge ${p.role === 'Admin' ? 'badge-danger' : (p.role === 'Faculty' ? 'badge-primary' : 'badge-free')}">${Utils.escapeHTML(p.badge)}</span>
-          </div>
-          ${isCurrent ? '<div class="ums-active-badge">&#10003; Active Session</div>' : '<div class="ums-switch-hint">Click to switch &rarr;</div>'}
-        </div>
-      `;
-    });
-
-    const activeUserBanner = activeUser ? `
-      <div class="ums-session-banner" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-subtle); padding: var(--space-3); border-radius: var(--radius-md); margin-bottom: var(--space-4); border: 1px solid var(--border-subtle);">
-        <div>
-          <span style="font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; font-weight: bold;">Signed in as</span>
-          <div style="font-weight: bold; font-size: var(--text-sm);">${Utils.escapeHTML(activeUser.name)} (${Utils.escapeHTML(activeUser.id)} &bull; ${Utils.escapeHTML(activeUser.role)})</div>
-        </div>
-        <button id="ums-signout-btn" class="btn btn-sm btn-subtle" type="button" style="color: var(--color-danger);">Sign Out</button>
-      </div>
-    ` : '';
-
-    const bodyHtml = `
-      <div class="ums-modal-content">
-        <div class="ums-branding-banner" style="margin-bottom: var(--space-4); text-align: center;">
-          <h3 style="margin: 0; color: var(--color-primary); font-size: var(--text-base);">University Management System (UMS) SSO</h3>
-          <p style="margin: var(--space-1) 0 0 0; font-size: var(--text-xs); color: var(--text-secondary);">Lovely Professional University &bull; Division of Academic Affairs</p>
-        </div>
-
-        ${activeUserBanner}
-
-        <div style="margin-bottom: var(--space-3);">
-          <label class="form-label" style="font-weight: var(--font-semibold);">1-Click Fast Switch Profiles</label>
-          <div class="ums-profiles-grid" style="display: grid; gap: var(--space-2); margin-top: var(--space-2);">
-            ${profilesHtml}
-          </div>
-        </div>
-
-        <div class="ums-divider" style="text-align: center; margin: var(--space-4) 0; position: relative;">
-          <span style="background: var(--bg-surface); padding: 0 var(--space-3); font-size: var(--text-xs); color: var(--text-muted); position: relative; z-index: 1;">Or Sign In with University Credentials</span>
-          <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--border-subtle);"></div>
-        </div>
-
-        <form id="ums-manual-form" style="display: grid; gap: var(--space-3);">
-          <div class="form-group" style="margin: 0;">
-            <label for="ums-uid-input" class="form-label">University ID / UID</label>
-            <input type="text" id="ums-uid-input" class="form-input" placeholder="e.g. 12611041 (Student), FAC1024 (Faculty), ADMIN" required />
-            <span class="form-hint">Student (8 digits: 126xxxxx), Faculty (FACxxxx), or ADMIN</span>
-          </div>
-          <div class="form-group" style="margin: 0;">
-            <label for="ums-pass-input" class="form-label">Password / PIN</label>
-            <input type="password" id="ums-pass-input" class="form-input" placeholder="••••••••" required />
-          </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: var(--space-1);">Authenticate &amp; Sign In</button>
-        </form>
-      </div>
-    `;
-
-    this.showModal('LPU UMS Single Sign-On', bodyHtml, null, 'Close');
-
-    const modalEl = document.getElementById('app-modal');
-    if (!modalEl) return;
-
-    // Sign out handler
-    const signOutBtn = modalEl.querySelector('#ums-signout-btn');
-    if (signOutBtn) {
-      signOutBtn.addEventListener('click', function() {
-        if (typeof App !== 'undefined' && App.clearUmsUser) {
-          App.clearUmsUser();
-          UI.closeModal();
-          UI.showToast('Signed out of LPU UMS.', 'info');
-        }
-      });
-    }
-
-    // Quick profile selection handlers
-    const cardEls = modalEl.querySelectorAll('.ums-profile-card');
-    cardEls.forEach(function(card) {
-      const pid = card.getAttribute('data-profile-id');
-      const profile = quickProfiles.find(function(p) { return p.id === pid; });
-      if (!profile) return;
-
-      const selectProfile = function() {
-        if (profile.role === 'Admin') {
-          const success = (typeof App !== 'undefined' && App.setRole) ? App.setRole(Config.ROLES.ADMIN, '1234') : false;
-          if (success) {
-            App.setUmsUser(profile);
-            UI.closeModal();
-            UI.showToast(`Elevated session verified. Welcome, ${profile.name}!`, 'success');
-          }
-        } else {
-          if (typeof App !== 'undefined') {
-            App.setRole(profile.role === 'Faculty' ? Config.ROLES.FACULTY : Config.ROLES.STUDENT);
-            App.setUmsUser(profile);
-          }
-          UI.closeModal();
-          UI.showToast(`Welcome back, ${profile.name}! Signed in via LPU UMS.`, 'success');
-        }
-      };
-
-      card.addEventListener('click', selectProfile);
-      card.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          selectProfile();
-        }
-      });
-    });
-
-    // Manual form submit
-    const manualForm = modalEl.querySelector('#ums-manual-form');
-    if (manualForm) {
-      manualForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const uid = (modalEl.querySelector('#ums-uid-input').value || '').trim();
-        const pass = (modalEl.querySelector('#ums-pass-input').value || '').trim();
-
-        if (!uid) {
-          UI.showToast('Please enter your University ID / UID.', 'error');
-          return;
-        }
-
-        if (uid.toUpperCase() === 'ADMIN') {
-          const success = (typeof App !== 'undefined' && App.setRole) ? App.setRole(Config.ROLES.ADMIN, pass) : false;
-          if (success) {
-            App.setUmsUser({
-              id: 'ADMIN',
-              name: 'Estate Administrator',
-              role: 'Admin',
-              dept: 'Campus Estates & Operations Control',
-              email: 'estates@lpu.in',
-              phone: '01824-510000'
-            });
-            UI.closeModal();
-            UI.showToast('Admin session verified. Welcome, Administrator!', 'success');
-          }
-          return;
-        }
-
-        const facultyCheck = Validators.validateFacultyId ? Validators.validateFacultyId(uid) : { valid: false };
-        const studentCheck = Validators.validateStudentId ? Validators.validateStudentId(uid) : { valid: false };
-
-        if (facultyCheck.valid) {
-          const prof = {
-            id: uid.toUpperCase(),
-            name: `Faculty Member (${uid.toUpperCase()})`,
-            role: 'Faculty',
-            dept: 'Division of Academic Affairs',
-            email: `${uid.toLowerCase()}@lpu.co.in`,
-            phone: ''
-          };
-          App.setRole(Config.ROLES.FACULTY);
-          App.setUmsUser(prof);
-          UI.closeModal();
-          UI.showToast(`Authenticated as Faculty (${uid.toUpperCase()}).`, 'success');
-        } else if (studentCheck.valid) {
-          const prof = {
-            id: uid,
-            name: `Student (${uid})`,
-            role: 'Student',
-            dept: 'School of Computer Science & Engineering',
-            email: `${uid}@lpu.in`,
-            phone: ''
-          };
-          App.setRole(Config.ROLES.STUDENT);
-          App.setUmsUser(prof);
-          UI.closeModal();
-          UI.showToast(`Authenticated as Student (${uid}).`, 'success');
-        } else {
-          UI.showToast('Invalid UID format. Expected 8-digit Student ID (126xxxxx), Faculty ID (FACxxxx), or ADMIN.', 'error');
-        }
-      });
-    }
+    this.showRoleSwitcher();
   },
 
   /**
@@ -745,7 +530,7 @@ const UI = {
       type: 'action',
       category: 'Navigation',
       icon: '&#9881;',
-      title: 'LPU Guidelines & Helpdesk Directory',
+      title: 'Campus Guidelines & Helpdesk Directory',
       subtitle: 'Block coordinator extensions, operating hours, and FAQ',
       tags: 'help guidelines directory contact support phone faq rules',
       action: function() { window.location.hash = '#/help'; }
@@ -754,10 +539,10 @@ const UI = {
       type: 'action',
       category: 'Quick Actions',
       icon: '&#128100;',
-      title: 'Sign in with LPU UMS',
-      subtitle: 'Switch identity or sign in as Student, Faculty, or Admin',
-      tags: 'ums login sso account user profile switch angel kartik dhruv rajesh',
-      action: function() { self.showUmsLoginModal(); }
+      title: 'Switch Role (Student / Faculty / Admin)',
+      subtitle: 'Switch between Student, Faculty, and Admin personas',
+      tags: 'role switch user student faculty admin coordinator persona',
+      action: function() { self.showRoleSwitcher(); }
     });
     items.push({
       type: 'action',

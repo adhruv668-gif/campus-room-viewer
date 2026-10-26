@@ -515,7 +515,7 @@ const Bookings = {
       status: (initialFilters && initialFilters.status) || 'All',
       search: (initialFilters && initialFilters.search) || '',
       requesterId: isAdmin ? '' : defaultId,
-      myUmsOnly: false,
+      myOnly: false,
       page: 1,
       pageSize: Config.PAGINATION.ITEMS_PER_PAGE
     };
@@ -524,6 +524,7 @@ const Bookings = {
     const render = function() {
       const allBookings = self.getAll();
       const currentUms = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
+      const activePerson = currentUms || lastRequester;
 
       // Filter by requester for non-admins
       let filtered = allBookings;
@@ -534,10 +535,10 @@ const Bookings = {
         });
       }
 
-      // Filter by active UMS persona if selected
-      if (state.myUmsOnly && currentUms) {
+      // Filter by active persona if selected
+      if (state.myOnly && activePerson && activePerson.id) {
         filtered = filtered.filter(function(b) {
-          return b.requesterId.toUpperCase() === currentUms.id.toUpperCase();
+          return b.requesterId.toUpperCase() === activePerson.id.toUpperCase();
         });
       }
 
@@ -589,10 +590,11 @@ const Bookings = {
         const cnt = counts[st] !== undefined ? counts[st] : 0;
         statusChips += `<button class="btn btn-sm ${activeClass} req-status-tab" data-status="${st}" type="button">${st} (${cnt})</button>`;
       });
-      if (umsUser) {
+      const displayPerson = currentUms || (lastRequester.id ? lastRequester : null);
+      if (displayPerson && displayPerson.name) {
         statusChips += `
-          <button id="req-my-ums-btn" class="btn btn-sm ${state.myUmsOnly ? 'btn-primary' : 'btn-subtle'}" type="button" style="margin-left: auto;">
-            &#128100; My Bookings (${Utils.escapeHTML(umsUser.name.split(' ')[0])})
+          <button id="req-my-btn" class="btn btn-sm ${state.myOnly ? 'btn-primary' : 'btn-subtle'}" type="button" style="margin-left: auto;">
+            &#128100; My Bookings (${Utils.escapeHTML(displayPerson.name.split(' ')[0])})
           </button>
         `;
       }
@@ -813,10 +815,10 @@ const Bookings = {
         });
       }
 
-      const myUmsBtn = containerEl.querySelector('#req-my-ums-btn');
-      if (myUmsBtn) {
-        myUmsBtn.addEventListener('click', function() {
-          state.myUmsOnly = !state.myUmsOnly;
+      const myBtn = containerEl.querySelector('#req-my-btn');
+      if (myBtn) {
+        myBtn.addEventListener('click', function() {
+          state.myOnly = !state.myOnly;
           state.page = 1;
           render();
         });
@@ -1066,7 +1068,7 @@ const Bookings = {
           <div class="print-field"><span class="print-label">ASSIGNED ROOM:</span> <span class="print-val">${Utils.escapeHTML(room ? room.name : 'Classroom')} (Room ${Utils.escapeHTML(room ? room.roomNo : 'N/A')})</span></div>
           <div class="print-field"><span class="print-label">CAMPUS BLOCK:</span> <span class="print-val">${Utils.escapeHTML(bldgName)}</span></div>
           <div class="print-field"><span class="print-label">REQUESTER:</span> <span class="print-val">${Utils.escapeHTML(booking.requesterName)} (${Utils.escapeHTML(booking.requesterType)})</span></div>
-          <div class="print-field"><span class="print-label">LPU ID / UID:</span> <span class="print-val">${Utils.escapeHTML(booking.requesterId)}</span></div>
+          <div class="print-field"><span class="print-label">REQUESTER ID:</span> <span class="print-val">${Utils.escapeHTML(booking.requesterId)}</span></div>
           <div class="print-field full-width"><span class="print-label">PURPOSE:</span> <span class="print-val">${Utils.escapeHTML(booking.purpose)}</span></div>
           <div class="print-field full-width"><span class="print-label">EXPECTED ATTENDEES:</span> <span class="print-val">${Utils.escapeHTML(String(booking.attendees))} Persons</span></div>
         </div>
@@ -1099,17 +1101,15 @@ const Bookings = {
     const editBooking = isEdit ? this.getById(editBookingId) : null;
     const settings = Store.get('SETTINGS') || {};
     const lastRequester = settings.lastRequester || {};
-    const umsUser = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
-
     const activeRole = (typeof App !== 'undefined' && App.getCurrentRole) ? App.getCurrentRole() : Config.ROLES.STUDENT;
-    const initialType = (editBooking ? editBooking.requesterType : (umsUser ? (umsUser.role === 'Faculty' ? 'Faculty' : 'Student') : (activeRole === Config.ROLES.FACULTY ? 'Faculty' : 'Student')));
+    const initialType = (editBooking ? editBooking.requesterType : (lastRequester.type || (activeRole === Config.ROLES.FACULTY ? 'Faculty' : 'Student')));
 
     const initialData = {
       requesterType: initialType,
-      requesterName: editBooking ? editBooking.requesterName : ((umsUser && umsUser.name) || lastRequester.name || ''),
-      requesterId: editBooking ? editBooking.requesterId : ((umsUser && umsUser.id) || lastRequester.id || ''),
-      email: editBooking ? editBooking.email : ((umsUser && umsUser.email) || lastRequester.email || ''),
-      phone: editBooking ? editBooking.phone : ((umsUser && umsUser.phone) || lastRequester.phone || ''),
+      requesterName: editBooking ? editBooking.requesterName : (lastRequester.name || ''),
+      requesterId: editBooking ? editBooking.requesterId : (lastRequester.id || ''),
+      email: editBooking ? editBooking.email : (lastRequester.email || ''),
+      phone: editBooking ? editBooking.phone : (lastRequester.phone || ''),
       roomId: editBooking ? editBooking.roomId : (prefill && prefill.roomId) || '',
       date: editBooking ? editBooking.date : (prefill && prefill.date) || Utils.getLocalDateString(Utils.getNow()),
       startSlot: editBooking ? editBooking.startSlot : (prefill && prefill.startSlot) || 1,
@@ -1190,7 +1190,7 @@ const Bookings = {
             <div class="grid-2col">
               <div class="form-group">
                 <label for="req-email" class="form-label form-label-required">Official Email</label>
-                <input type="email" id="req-email" class="form-input" value="${Utils.escapeHTML(initialData.email)}" placeholder="name@lpu.in" required />
+                <input type="email" id="req-email" class="form-input" value="${Utils.escapeHTML(initialData.email)}" placeholder="name@campus.edu" required />
                 <div id="err-req-email" class="form-error"></div>
               </div>
               <div class="form-group">
@@ -1558,12 +1558,13 @@ const Bookings = {
     const drawerEl = document.getElementById('booking-drawer');
     if (!drawerBackdrop || !drawerEl) return;
 
-    const umsUser = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
-    const defaultRequester = umsUser || {
+    const settings = Store.get('SETTINGS') || {};
+    const lastRequester = settings.lastRequester || {};
+    const defaultRequester = lastRequester.id ? lastRequester : {
       name: 'Angel Seth',
       id: '12611041',
       role: 'Student',
-      email: 'angel.12611041@lpu.in',
+      email: 'angel.12611041@campus.edu',
       phone: '9876543210'
     };
 
@@ -1657,8 +1658,8 @@ const Bookings = {
           <div>
             <label class="form-label">Requester Persona:</label>
             <div style="display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2);">
-              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Angel Seth" data-id="12611041" data-type="Student" data-email="angel.12611041@lpu.in" data-phone="9876543210">&#127891; Angel Seth (Student)</button>
-              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Dr. Rajesh Kumar" data-id="FAC1001" data-type="Faculty" data-email="rajesh.fac1001@lpu.in" data-phone="9876543211">&#128104;&#8205;&#127979; Dr. Rajesh (Faculty)</button>
+              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Angel Seth" data-id="12611041" data-type="Student" data-email="angel.12611041@campus.edu" data-phone="9876543210">&#127891; Angel Seth (Student)</button>
+              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Dr. Rajesh Kumar" data-id="FAC1001" data-type="Faculty" data-email="rajesh.fac1001@campus.edu" data-phone="9876543211">&#128104;&#8205;&#127979; Dr. Rajesh (Faculty)</button>
             </div>
             <div class="grid-2col" style="gap: var(--space-2);">
               <input type="text" id="drawer-name-input" class="form-input" placeholder="Full Name" value="${Utils.escapeHTML(defaultRequester.name)}" />
@@ -1768,7 +1769,7 @@ const Bookings = {
             requesterName: nameVal,
             requesterId: idVal,
             requesterType: (idVal.toUpperCase().startsWith('FAC') || idVal.length <= 7) ? 'Faculty' : 'Student',
-            email: `${idVal.toLowerCase()}@lpu.in`,
+            email: `${idVal.toLowerCase()}@campus.edu`,
             phone: phoneVal,
             requirements: []
           };

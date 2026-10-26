@@ -85,7 +85,7 @@ const Validators = {
     const trimmed = email.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmed)) {
-      return { valid: false, error: 'Please enter a valid email address (e.g. yourname@lpu.in).' };
+      return { valid: false, error: 'Please enter a valid email address (e.g. yourname@campus.edu).' };
     }
     return { valid: true };
   },

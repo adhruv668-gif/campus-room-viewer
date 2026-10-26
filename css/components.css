@@ -816,7 +816,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   11. Header Enterprise Additions (Command Palette & UMS Profile Pill)
+   11. Header Enterprise Additions (Command Palette & Quick Actions)
    -------------------------------------------------------------------------- */
 .cmd-palette-trigger {
   display: inline-flex;
@@ -849,21 +849,6 @@
   color: var(--text-secondary);
 }
 
-.ums-profile-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 10px;
-  height: 36px;
-  min-height: 36px;
-  box-sizing: border-box;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
 .theme-toggle {
   width: 36px;
   height: 36px;
@@ -875,114 +860,6 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-}
-
-.ums-profile-pill:hover, .ums-profile-pill:focus-visible {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-  outline: none;
-}
-
-.ums-profile-pill.signed-in {
-  background: var(--color-primary-bg);
-  border-color: var(--color-primary);
-}
-
-.ums-avatar {
-  font-size: 14px;
-}
-
-.ums-info {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-  text-align: left;
-}
-
-.ums-user-name {
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-}
-
-.ums-user-sub {
-  font-size: 9.5px;
-  color: var(--text-secondary);
-}
-
-/* --------------------------------------------------------------------------
-   12. UMS SSO Modal & Profile Cards
-   -------------------------------------------------------------------------- */
-.ums-profiles-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-2);
-}
-
-.ums-profile-card {
-  padding: var(--space-3);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.ums-profile-card:hover, .ums-profile-card:focus-visible {
-  border-color: var(--color-primary);
-  background: var(--bg-subtle);
-  transform: translateY(-1px);
-  outline: none;
-}
-
-.ums-profile-card.is-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-}
-
-.ums-card-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.ums-card-avatar {
-  font-size: 20px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-subtle);
-  border-radius: 50%;
-}
-
-.ums-card-details {
-  flex: 1;
-}
-
-.ums-card-name {
-  font-weight: var(--font-bold);
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-}
-
-.ums-card-id {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-.ums-active-badge {
-  font-size: 11px;
-  font-weight: bold;
-  color: var(--color-free);
-  margin-top: var(--space-1);
-}
-
-.ums-switch-hint {
-  font-size: 11px;
-  color: var(--color-primary);
-  margin-top: var(--space-1);
 }
 
 /* --------------------------------------------------------------------------
@@ -1844,7 +1721,6 @@
   .toast-container,
   .cmd-palette-backdrop,
   .cmd-palette-trigger,
-  .ums-profile-pill,
   .role-switcher,
   .theme-toggle-btn,
   .modal-dialog,
