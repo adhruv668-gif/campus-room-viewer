@@ -1143,5 +1143,248 @@ const Rooms = {
       };
       reader.readAsText(file);
     });
+  },
+
+  /**
+   * Opens detailed room specifications dialog.
+   * @param {string} roomId
+   */
+  showRoomSpecModal: function(roomId) {
+    const room = this.getById(roomId);
+    if (!room) return;
+    const bldg = this.getBuildingById(room.buildingId);
+    const todayStr = Utils.getLocalDateString(Utils.getNow());
+    const dur = Availability.getFreeDuration(roomId, todayStr);
+    const summary = Availability.getRoomDailySummary(roomId, todayStr);
+
+    let scheduleRows = '';
+    summary.slots.forEach(function(s) {
+      const sDef = Config.SLOTS.find(function(item) { return item.id === s.slot; });
+      scheduleRows += `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border-color); font-size: var(--text-xs);">
+          <span><strong>Slot ${s.slot}</strong> (${sDef ? `${sDef.start} - ${sDef.end}` : ''})</span>
+          <span class="badge badge-${s.status.toLowerCase()}">${s.status}</span>
+        </div>
+      `;
+    });
+
+    const bodyHtml = `
+      <div class="room-spec-modal-body">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3);">
+          <div>
+            <h3 style="margin: 0; font-size: 1.25rem;">Room ${Utils.escapeHTML(room.roomNo)}</h3>
+            <p style="margin: 0; color: var(--text-muted);">${Utils.escapeHTML(bldg ? bldg.name : '')} &bull; ${Utils.escapeHTML(room.name)}</p>
+          </div>
+          <span class="badge ${room.status === 'Active' ? 'badge-free' : 'badge-maint'}">${Utils.escapeHTML(room.status)}</span>
+        </div>
+
+        <div class="grid-2col" style="gap: var(--space-3); margin-bottom: var(--space-4);">
+          <div class="card" style="padding: var(--space-3);">
+            <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Room Specs</div>
+            <div style="margin-top: var(--space-2); font-size: var(--text-sm);">
+              <div><strong>Type:</strong> ${Utils.escapeHTML(room.type)}</div>
+              <div><strong>Capacity:</strong> ${Utils.escapeHTML(String(room.capacity))} seats</div>
+              <div><strong>Floor:</strong> Level ${Utils.escapeHTML(String(room.floor))}</div>
+            </div>
+          </div>
+          <div class="card" style="padding: var(--space-3);">
+            <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Live Availability</div>
+            <div style="margin-top: var(--space-2); font-size: var(--text-sm);">
+              <div><strong>Status:</strong> ${dur.isFreeNow ? '<span class="text-green">&#9989; Free Now</span>' : '<span class="text-orange">&#128218; In Use</span>'}</div>
+              <div><strong>Duration:</strong> ${Utils.escapeHTML(dur.countdownText)}</div>
+              <div><strong>Occupancy Today:</strong> ${summary.percentOccupied}%</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: var(--space-3);">
+          <h4 style="font-size: var(--text-sm); margin-bottom: var(--space-2);">Equipment &amp; Facilities</h4>
+          <div style="display: flex; gap: var(--space-2); flex-wrap: wrap;">
+            ${(room.facilities && room.facilities.length > 0) ? room.facilities.map(function(f) { return `<span class="chip">&#10003; ${Utils.escapeHTML(f)}</span>`; }).join('') : '<span class="form-hint">Standard Room Configuration</span>'}
+          </div>
+        </div>
+
+        <div>
+          <h4 style="font-size: var(--text-sm); margin-bottom: var(--space-2);">Today's Schedule Breakdown</h4>
+          <div style="max-height: 180px; overflow-y: auto; background: var(--bg-subtle); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            ${scheduleRows}
+          </div>
+        </div>
+
+        <div style="margin-top: var(--space-4); display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary" id="spec-open-kiosk-btn">&#128682; Open Digital Door Sign</button>
+          <button type="button" class="btn btn-primary" id="spec-book-room-btn">&#9889; Book This Room</button>
+        </div>
+      </div>
+    `;
+
+    UI.showModal(`Room Specifications &bull; Room ${room.roomNo}`, bodyHtml);
+
+    const kioskBtn = document.getElementById('spec-open-kiosk-btn');
+    if (kioskBtn) {
+      kioskBtn.addEventListener('click', function() {
+        UI.closeModal();
+        Rooms.showDoorKiosk(roomId);
+      });
+    }
+
+    const bookBtn = document.getElementById('spec-book-room-btn');
+    if (bookBtn) {
+      bookBtn.addEventListener('click', function() {
+        UI.closeModal();
+        if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
+          Bookings.openBookingDrawer(roomId, todayStr, Utils.getCurrentSlot() || 1, Utils.getCurrentSlot() || 1);
+        } else {
+          window.location.hash = `#/request?roomId=${encodeURIComponent(roomId)}&date=${encodeURIComponent(todayStr)}`;
+        }
+      });
+    }
+  },
+
+  /**
+   * Opens fullscreen digital door sign preview overlay.
+   * @param {string} roomId
+   */
+  showDoorKiosk: function(roomId) {
+    const room = this.getById(roomId);
+    if (!room) return;
+    const bldg = this.getBuildingById(room.buildingId);
+    const todayStr = Utils.getLocalDateString(Utils.getNow());
+    const dur = Availability.getFreeDuration(roomId, todayStr);
+    const summary = Availability.getRoomDailySummary(roomId, todayStr);
+    const currentSlot = Utils.getCurrentSlot() || 1;
+
+    const backdropEl = document.getElementById('door-kiosk-backdrop');
+    const containerEl = document.getElementById('door-kiosk-container');
+    if (!backdropEl || !containerEl) return;
+
+    // Timeline bar
+    let timelinePills = '';
+    summary.slots.forEach(function(s) {
+      const sDef = Config.SLOTS.find(function(item) { return item.id === s.slot; });
+      const isCur = (s.slot === currentSlot);
+      let bg = 'var(--color-free-bg)';
+      let border = 'var(--color-free-border)';
+      let text = 'Free';
+      if (s.status === 'Class') {
+        bg = 'var(--color-class-bg)';
+        border = 'var(--color-class-border)';
+        text = s.details ? s.details.course.split(' ')[0] : 'Class';
+      } else if (s.status === 'Booked') {
+        bg = 'var(--color-booked-bg)';
+        border = 'var(--color-booked-border)';
+        text = 'Reserved';
+      } else if (s.status === 'Maintenance') {
+        bg = 'var(--color-maint-bg)';
+        border = 'var(--color-maint-border)';
+        text = 'Maint';
+      }
+      timelinePills += `
+        <div class="kiosk-timeline-slot ${isCur ? 'kiosk-slot-active' : ''}" style="background: ${bg}; border: 1px solid ${border};">
+          <div class="kiosk-slot-time">${sDef ? sDef.start : `S${s.slot}`}</div>
+          <div class="kiosk-slot-status">${Utils.escapeHTML(text)}</div>
+        </div>
+      `;
+    });
+
+    const isAvailable = dur.isFreeNow;
+    const bannerClass = isAvailable ? 'kiosk-banner-available' : 'kiosk-banner-inuse';
+
+    containerEl.innerHTML = `
+      <div class="kiosk-tablet-frame">
+        <div class="kiosk-header">
+          <div>
+            <div class="kiosk-bldg-title">${Utils.escapeHTML(bldg ? bldg.name : 'Campus Building')} &bull; Floor ${Utils.escapeHTML(String(room.floor))}</div>
+            <h1 class="kiosk-room-title">Room ${Utils.escapeHTML(room.roomNo)}</h1>
+            <div class="kiosk-room-subtitle">${Utils.escapeHTML(room.name)} &bull; ${Utils.escapeHTML(room.type)} &bull; ${Utils.escapeHTML(String(room.capacity))} Seats</div>
+          </div>
+          <div class="kiosk-clock-section">
+            <div id="kiosk-live-clock" class="kiosk-clock-display">--:--:--</div>
+            <div class="kiosk-date-display">${Utils.formatDate(todayStr)}</div>
+            <button id="kiosk-close-btn" class="btn btn-sm btn-subtle kiosk-close-btn" type="button" aria-label="Close Door Sign Display">&#10005; Exit Display</button>
+          </div>
+        </div>
+
+        <div class="kiosk-banner ${bannerClass}">
+          <div class="kiosk-status-icon">${isAvailable ? '&#9989;' : '&#128218;'}</div>
+          <div>
+            <div class="kiosk-status-heading">${isAvailable ? 'ROOM AVAILABLE NOW' : 'ROOM IN USE'}</div>
+            <div class="kiosk-status-detail">${Utils.escapeHTML(dur.countdownText)}</div>
+          </div>
+        </div>
+
+        <div class="kiosk-timeline-section">
+          <div class="kiosk-section-title">Today's Schedule &bull; 09:00 - 18:00</div>
+          <div class="kiosk-timeline-bar">
+            ${timelinePills}
+          </div>
+        </div>
+
+        <div class="kiosk-footer">
+          <div class="kiosk-facilities-strip">
+            ${(room.facilities || []).map(function(f) { return `<span class="chip">&#10003; ${Utils.escapeHTML(f)}</span>`; }).join(' ') || '<span class="chip">Standard Classroom</span>'}
+          </div>
+          <div class="kiosk-actions">
+            ${isAvailable ? `
+              <button id="kiosk-quick-book-btn" class="btn btn-lg btn-primary kiosk-cta-btn" type="button">&#9889; Quick Reserve 1-Hour Now</button>
+            ` : `
+              <button id="kiosk-prebook-btn" class="btn btn-lg btn-secondary kiosk-cta-btn" type="button">Reserve Future Slot</button>
+            `}
+          </div>
+        </div>
+      </div>
+    `;
+
+    backdropEl.classList.remove('hidden');
+    backdropEl.setAttribute('aria-hidden', 'false');
+
+    // Live clock updater inside kiosk
+    const updateKioskClock = function() {
+      const clockEl = document.getElementById('kiosk-live-clock');
+      if (clockEl) {
+        clockEl.textContent = Utils.formatTime(Utils.getNow());
+      }
+    };
+    updateKioskClock();
+    const kioskClockInterval = setInterval(updateKioskClock, 1000);
+
+    const closeKiosk = function() {
+      clearInterval(kioskClockInterval);
+      backdropEl.classList.add('hidden');
+      backdropEl.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', handleEsc);
+    };
+
+    const handleEsc = function(e) {
+      if (e.key === 'Escape') closeKiosk();
+    };
+    document.addEventListener('keydown', handleEsc);
+
+    document.getElementById('kiosk-close-btn').addEventListener('click', closeKiosk);
+
+    const quickBookBtn = document.getElementById('kiosk-quick-book-btn');
+    if (quickBookBtn) {
+      quickBookBtn.addEventListener('click', function() {
+        closeKiosk();
+        if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
+          Bookings.openBookingDrawer(roomId, todayStr, currentSlot, currentSlot);
+        } else {
+          window.location.hash = `#/request?roomId=${encodeURIComponent(roomId)}&date=${encodeURIComponent(todayStr)}&startSlot=${currentSlot}&endSlot=${currentSlot}`;
+        }
+      });
+    }
+
+    const prebookBtn = document.getElementById('kiosk-prebook-btn');
+    if (prebookBtn) {
+      prebookBtn.addEventListener('click', function() {
+        closeKiosk();
+        const nextSlot = dur.nextFreeSlot || 1;
+        if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
+          Bookings.openBookingDrawer(roomId, todayStr, nextSlot, nextSlot);
+        } else {
+          window.location.hash = `#/request?roomId=${encodeURIComponent(roomId)}&date=${encodeURIComponent(todayStr)}&startSlot=${nextSlot}&endSlot=${nextSlot}`;
+        }
+      });
+    }
   }
 };

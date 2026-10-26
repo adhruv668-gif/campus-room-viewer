@@ -456,6 +456,48 @@ const Bookings = {
   },
 
   /**
+   * Registers on-site room check-in for an approved booking on reservation date.
+   * Prevents premature check-in (future dates) or past/completed bookings.
+   * @param {string} id
+   * @returns {{ success: boolean, message: string, alreadyCheckedIn?: boolean }}
+   */
+  checkInBooking: function(id) {
+    const booking = this.getById(id);
+    if (!booking) return { success: false, message: 'Booking not found.' };
+
+    const computedStatus = this.getComputedStatus(booking);
+    if (computedStatus !== Config.BOOKING_STATUS.APPROVED) {
+      return { success: false, message: `Only approved upcoming bookings can be checked in. Current status: ${computedStatus}.` };
+    }
+
+    const todayStr = Utils.getLocalDateString(Utils.getNow());
+    if (booking.date !== todayStr) {
+      return { success: false, message: `Check-in is only permitted on the day of reservation (${Utils.formatDate(booking.date)}).` };
+    }
+
+    if (booking.checkedIn) {
+      return { success: true, message: 'Booking is already checked in.', alreadyCheckedIn: true };
+    }
+
+    const nowIso = Utils.getNow().toISOString();
+    booking.checkedIn = true;
+    booking.checkedInAt = nowIso;
+    booking.updatedAt = nowIso;
+    booking.history.push({
+      status: 'Checked-In',
+      at: nowIso,
+      by: 'User',
+      note: 'Requester completed on-site room check-in.'
+    });
+
+    const saved = Store.updateItem('BOOKINGS', id, booking);
+    if (!saved) {
+      return { success: false, message: 'Storage write failed. Could not register check-in.' };
+    }
+    return { success: true, message: `Successfully checked in for Room ${booking.roomId}!` };
+  },
+
+  /**
    * Renders the Requests List table, pagination, search, and status chips.
    * @param {HTMLElement} containerEl
    * @param {object} [initialFilters={}]
@@ -587,6 +629,16 @@ const Bookings = {
         const isOwner = (b.requesterId.toUpperCase() === (lastRequester.id || '').toUpperCase());
         const canEdit = isOwner && (computed === 'Pending') && !isPast;
         const canCancel = (isOwner || isAdmin) && (computed === 'Pending' || computed === 'Approved') && !isPast;
+        const canCheckIn = (computed === 'Approved') && (b.date === todayStr) && !isPast;
+
+        let checkInAction = '';
+        if (canCheckIn) {
+          if (b.checkedIn) {
+            checkInAction = `<span class="badge badge-free" style="padding: 3px 6px; font-size: 0.7rem;" title="Checked in">&#10003; Checked In</span>`;
+          } else {
+            checkInAction = `<button class="btn btn-sm btn-primary req-checkin-btn" data-id="${Utils.escapeHTML(b.id)}" type="button" title="Check in to this room now">&#10003; Check In</button>`;
+          }
+        }
 
         rows += `
           <tr>
@@ -606,7 +658,8 @@ const Bookings = {
               <span class="badge ${badgeMap[computed] || 'badge-subtle'}">${computed}</span>
             </td>
             <td data-label="Actions" style="text-align: right;">
-              <div style="display: inline-flex; gap: 4px;">
+              <div style="display: inline-flex; gap: 4px; align-items: center;">
+                ${checkInAction}
                 <button class="btn btn-sm btn-subtle view-details-btn" data-id="${Utils.escapeHTML(b.id)}" type="button">Details</button>
                 <button class="btn btn-sm btn-subtle req-ics-btn" data-id="${Utils.escapeHTML(b.id)}" type="button" title="Add to Calendar (.ics)">&#128197; .ics</button>
                 ${isAdmin && computed === 'Pending' ? `
@@ -769,6 +822,15 @@ const Bookings = {
 
     // Table Actions Delegation
     containerEl.addEventListener('click', function(e) {
+      const checkinBtn = e.target.closest('.req-checkin-btn');
+      if (checkinBtn) {
+        const id = checkinBtn.getAttribute('data-id');
+        const res = self.checkInBooking(id);
+        UI.showToast(res.message, res.success ? 'success' : 'error');
+        if (res.success) render();
+        return;
+      }
+
       const detailsBtn = e.target.closest('.view-details-btn');
       if (detailsBtn) {
         self.renderBookingDetails(detailsBtn.getAttribute('data-id'));
@@ -1468,6 +1530,287 @@ const Bookings = {
         UI.showToast((result.errors && result.errors.form) || 'Please fix the errors in the form before submitting.', 'error');
       }
     });
+    }
+  },
+
+  /**
+   * Opens slide-over fast booking drawer with visual range picker and conflict assistant.
+   * @param {string} roomId
+   * @param {string} [dateStr]
+   * @param {number} [startSlot]
+   * @param {number} [endSlot]
+   */
+  openBookingDrawer: function(roomId, dateStr, startSlot, endSlot) {
+    const room = Rooms.getById(roomId);
+    if (!room) return;
+    const bldg = Rooms.getBuildingById(room.buildingId);
+    const todayStr = Utils.getLocalDateString(Utils.getNow());
+    const date = dateStr || todayStr;
+    const initialStart = startSlot || 1;
+    const initialEnd = endSlot || initialStart;
+
+    const drawerBackdrop = document.getElementById('booking-drawer-backdrop');
+    const drawerEl = document.getElementById('booking-drawer');
+    if (!drawerBackdrop || !drawerEl) return;
+
+    const umsUser = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
+    const defaultRequester = umsUser || {
+      name: 'Angel Seth',
+      id: '12611041',
+      role: 'Student',
+      email: 'angel.12611041@lpu.in',
+      phone: '9876543210'
+    };
+
+    let selectedStart = initialStart;
+    let selectedEnd = initialEnd;
+    let selectedDate = date;
+
+    // Helper to render drawer content
+    const renderDrawerUI = function() {
+      // 9 slot picker pills
+      let slotPills = '';
+      for (let s = 1; s <= 9; s++) {
+        const st = Availability.getSlotStatus(room.id, selectedDate, s);
+        const sDef = Config.SLOTS.find(function(item) { return item.id === s; }) || {};
+        const isSelected = (s >= selectedStart && s <= selectedEnd);
+        let statusClass = `slot-pill-${st.status.toLowerCase()}`;
+        if (st.isPast) statusClass += ' slot-pill-past';
+        if (isSelected) statusClass += ' slot-pill-selected';
+
+        slotPills += `
+          <button type="button" class="drawer-slot-pill ${statusClass}" data-slot="${s}" title="Slot ${s} (${sDef.start}-${sDef.end}): ${st.status}">
+            <span class="slot-pill-num">Slot ${s}</span>
+            <span class="slot-pill-time">${sDef.start || ''}</span>
+            <span class="slot-pill-tag">${st.status === 'Free' ? 'Free' : st.status}</span>
+          </button>
+        `;
+      }
+
+      // Check conflicts
+      const conflicts = Availability.findConflicts(room.id, selectedDate, selectedStart, selectedEnd);
+      const hardConflicts = conflicts.filter(function(c) {
+        return c.type === 'maintenance' || c.type === 'class' || c.type === 'approved';
+      });
+      const hasConflict = hardConflicts.length > 0;
+
+      let conflictSection = '';
+      if (hasConflict) {
+        const alts = Availability.suggestAlternatives(room.id, selectedDate, selectedStart, selectedEnd, 1);
+        conflictSection = `
+          <div class="drawer-conflict-warning card" style="background: var(--color-danger-subtle, #fee2e2); border-color: #fca5a5; padding: var(--space-3); color: #991b1b;">
+            <div style="font-weight: bold; font-size: var(--text-sm);">&#9888; Slot Conflict Detected</div>
+            <div style="font-size: var(--text-xs); margin-top: 2px;">${Utils.escapeHTML(hardConflicts[0].reason)}</div>
+            ${alts.length > 0 ? `
+              <div style="margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px dashed #fca5a5;">
+                <div style="font-size: var(--text-xs); font-weight: bold;">Quick Switch to Free Alternative Room:</div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
+                  ${alts.map(function(alt) {
+                    return `
+                      <button type="button" class="btn btn-xs btn-secondary drawer-alt-switch-btn" data-room-id="${Utils.escapeHTML(alt.room.id)}" style="background: #ffffff; color: #1e293b; font-size: 0.7rem; padding: 3px 6px;">
+                        Room ${Utils.escapeHTML(alt.room.roomNo)} (${Utils.escapeHTML(alt.reason)})
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+
+      drawerEl.innerHTML = `
+        <div class="drawer-header">
+          <div>
+            <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Instant Booking Drawer</div>
+            <h3 style="margin: 0; font-size: 1.25rem;">Room ${Utils.escapeHTML(room.roomNo)} &bull; ${Utils.escapeHTML(room.name)}</h3>
+            <div style="font-size: var(--text-xs); color: var(--text-secondary);">${Utils.escapeHTML(bldg ? bldg.name : '')} &bull; ${Utils.escapeHTML(room.type)} &bull; Cap: ${room.capacity}</div>
+          </div>
+          <button type="button" id="drawer-close-btn" class="btn-icon" aria-label="Close booking drawer">&times;</button>
+        </div>
+
+        <div class="drawer-body">
+          <!-- Date & Slot Picker -->
+          <div class="form-group">
+            <label for="drawer-date-input" class="form-label">Reservation Date:</label>
+            <input type="date" id="drawer-date-input" class="form-input" value="${selectedDate}" min="${todayStr}" />
+          </div>
+
+          <div>
+            <label class="form-label">Select Slot Range (1-click fast picker):</label>
+            <div class="drawer-slots-grid">
+              ${slotPills}
+            </div>
+            <div class="form-hint" style="margin-top: 4px;">
+              Selected: <strong>Slot ${selectedStart} to Slot ${selectedEnd}</strong> (${Utils.formatSlotRange(selectedStart, selectedEnd)})
+            </div>
+          </div>
+
+          ${conflictSection}
+
+          <!-- Quick Persona Chips -->
+          <div>
+            <label class="form-label">Requester Persona:</label>
+            <div style="display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2);">
+              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Angel Seth" data-id="12611041" data-type="Student" data-email="angel.12611041@lpu.in" data-phone="9876543210">&#127891; Angel Seth (Student)</button>
+              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Dr. Rajesh Kumar" data-id="FAC1001" data-type="Faculty" data-email="rajesh.fac1001@lpu.in" data-phone="9876543211">&#128104;&#8205;&#127979; Dr. Rajesh (Faculty)</button>
+            </div>
+            <div class="grid-2col" style="gap: var(--space-2);">
+              <input type="text" id="drawer-name-input" class="form-input" placeholder="Full Name" value="${Utils.escapeHTML(defaultRequester.name)}" />
+              <input type="text" id="drawer-id-input" class="form-input" placeholder="Reg / Faculty ID" value="${Utils.escapeHTML(defaultRequester.id)}" />
+            </div>
+          </div>
+
+          <!-- Quick Purpose Buttons -->
+          <div>
+            <label class="form-label">Purpose / Event Title:</label>
+            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: var(--space-2);">
+              <button type="button" class="btn btn-xs btn-secondary drawer-purpose-chip" data-purpose="Group Study &amp; Problem Solving">Group Study</button>
+              <button type="button" class="btn btn-xs btn-secondary drawer-purpose-chip" data-purpose="Capstone Project Review &amp; Demo">Project Review</button>
+              <button type="button" class="btn btn-xs btn-secondary drawer-purpose-chip" data-purpose="Coding Practice &amp; Hackathon">Coding Practice</button>
+              <button type="button" class="btn btn-xs btn-secondary drawer-purpose-chip" data-purpose="Student Club Technical Workshop">Club Workshop</button>
+              <button type="button" class="btn btn-xs btn-secondary drawer-purpose-chip" data-purpose="Guest Speaker Lecture Session">Guest Lecture</button>
+            </div>
+            <input type="text" id="drawer-purpose-input" class="form-input" placeholder="E.g., Group Study Session" value="Group Study &amp; Problem Solving" />
+          </div>
+
+          <div class="grid-2col" style="gap: var(--space-2);">
+            <div>
+              <label for="drawer-attendees-input" class="form-label">Attendees (Max ${room.capacity}):</label>
+              <input type="number" id="drawer-attendees-input" class="form-input" value="4" min="1" max="${room.capacity}" />
+            </div>
+            <div>
+              <label for="drawer-phone-input" class="form-label">Phone Contact:</label>
+              <input type="tel" id="drawer-phone-input" class="form-input" placeholder="10 digits" value="${Utils.escapeHTML(defaultRequester.phone || '9876543210')}" />
+            </div>
+          </div>
+        </div>
+
+        <div class="drawer-footer">
+          <button type="button" id="drawer-cancel-btn" class="btn btn-secondary">Cancel</button>
+          <button type="button" id="drawer-submit-btn" class="btn btn-primary" ${hasConflict ? 'disabled' : ''}>
+            ${hasConflict ? 'Slot Unavailable' : 'Confirm &amp; Request Room'}
+          </button>
+        </div>
+      `;
+
+      // Wire close handlers
+      document.getElementById('drawer-close-btn').addEventListener('click', Bookings.closeBookingDrawer);
+      document.getElementById('drawer-cancel-btn').addEventListener('click', Bookings.closeBookingDrawer);
+
+      // Wire slot pill clicks
+      const pills = drawerEl.querySelectorAll('.drawer-slot-pill');
+      pills.forEach(function(pill) {
+        pill.addEventListener('click', function() {
+          const s = parseInt(pill.getAttribute('data-slot'), 10);
+          selectedStart = s;
+          selectedEnd = s;
+          renderDrawerUI();
+        });
+      });
+
+      // Wire date input change
+      document.getElementById('drawer-date-input').addEventListener('change', function(e) {
+        selectedDate = e.target.value;
+        renderDrawerUI();
+      });
+
+      // Wire persona chips
+      const pChips = drawerEl.querySelectorAll('.drawer-persona-chip');
+      pChips.forEach(function(chip) {
+        chip.addEventListener('click', function() {
+          document.getElementById('drawer-name-input').value = chip.getAttribute('data-name');
+          document.getElementById('drawer-id-input').value = chip.getAttribute('data-id');
+          document.getElementById('drawer-phone-input').value = chip.getAttribute('data-phone');
+          defaultRequester.role = chip.getAttribute('data-type');
+        });
+      });
+
+      // Wire purpose chips
+      const purposeChips = drawerEl.querySelectorAll('.drawer-purpose-chip');
+      purposeChips.forEach(function(chip) {
+        chip.addEventListener('click', function() {
+          document.getElementById('drawer-purpose-input').value = chip.getAttribute('data-purpose');
+        });
+      });
+
+      // Wire alternative switches
+      const altBtns = drawerEl.querySelectorAll('.drawer-alt-switch-btn');
+      altBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const altId = btn.getAttribute('data-room-id');
+          Bookings.openBookingDrawer(altId, selectedDate, selectedStart, selectedEnd);
+        });
+      });
+
+      // Wire submit
+      const submitBtn = document.getElementById('drawer-submit-btn');
+      if (submitBtn && !hasConflict) {
+        submitBtn.addEventListener('click', function() {
+          const nameVal = document.getElementById('drawer-name-input').value.trim();
+          const idVal = document.getElementById('drawer-id-input').value.trim();
+          const purposeVal = document.getElementById('drawer-purpose-input').value.trim();
+          const attendeesVal = parseInt(document.getElementById('drawer-attendees-input').value, 10) || 1;
+          const phoneVal = document.getElementById('drawer-phone-input').value.trim();
+
+          const reqData = {
+            roomId: room.id,
+            date: selectedDate,
+            startSlot: selectedStart,
+            endSlot: selectedEnd,
+            purpose: purposeVal,
+            attendees: attendeesVal,
+            requesterName: nameVal,
+            requesterId: idVal,
+            requesterType: (idVal.toUpperCase().startsWith('FAC') || idVal.length <= 7) ? 'Faculty' : 'Student',
+            email: `${idVal.toLowerCase()}@lpu.in`,
+            phone: phoneVal,
+            requirements: []
+          };
+
+          const res = Bookings.createBooking(reqData);
+          if (res.success) {
+            Bookings.closeBookingDrawer();
+            UI.showToast(`Request submitted! Reference: ${res.ref}`, 'success');
+            // Re-render current active view
+            if (typeof App !== 'undefined' && App.navigate) {
+              App.navigate(window.location.hash || '#/availability');
+            }
+          } else {
+            const err = res.errors ? Object.values(res.errors)[0] : 'Failed to submit booking request.';
+            UI.showToast(err, 'error');
+          }
+        });
+      }
+    };
+
+    renderDrawerUI();
+    drawerBackdrop.classList.remove('hidden');
+    drawerBackdrop.setAttribute('aria-hidden', 'false');
+
+    const handleEscDrawer = function(e) {
+      if (e.key === 'Escape') {
+        Bookings.closeBookingDrawer();
+        document.removeEventListener('keydown', handleEscDrawer);
+      }
+    };
+    document.addEventListener('keydown', handleEscDrawer);
+
+    drawerBackdrop.onclick = function(e) {
+      if (e.target === drawerBackdrop) {
+        Bookings.closeBookingDrawer();
+      }
+    };
+  },
+
+  /**
+   * Closes slide-over booking drawer.
+   */
+  closeBookingDrawer: function() {
+    const drawerBackdrop = document.getElementById('booking-drawer-backdrop');
+    if (drawerBackdrop) {
+      drawerBackdrop.classList.add('hidden');
+      drawerBackdrop.setAttribute('aria-hidden', 'true');
     }
   }
 };

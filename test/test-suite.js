@@ -1216,6 +1216,114 @@ runTest('Enterprise De-Academicization: Zero occurrences of Viva Examiner or CA1
   assert.ok(indexHtml.includes('Academic Estates'), 'index.html must contain enterprise branding');
 });
 
+runTest('Availability.getFreeDuration(): Computes consecutive free slots, countdown text, and next class event', () => {
+  Store.resetToSample();
+  const testDate = getUpcomingFutureDate(1);
+  const roomId = 'room-32-101';
+
+  // Query free duration starting from Slot 1
+  const durSlot1 = Availability.getFreeDuration(roomId, testDate, 1);
+  assert.ok(durSlot1, 'getFreeDuration must return a summary object');
+  assert.strictEqual(typeof durSlot1.isFreeNow, 'boolean');
+  assert.strictEqual(typeof durSlot1.freeSlotsCount, 'number');
+  assert.strictEqual(typeof durSlot1.durationMinutes, 'number');
+  assert.strictEqual(typeof durSlot1.countdownText, 'string');
+  assert.ok(durSlot1.countdownText.length > 0, 'Countdown text must not be empty');
+
+  if (durSlot1.isFreeNow) {
+    assert.strictEqual(durSlot1.durationMinutes, durSlot1.freeSlotsCount * 60);
+    assert.ok(durSlot1.freeSlotsCount >= 1, 'Free slots count must be at least 1');
+  }
+
+  // Create a timetable class at slot 3 on testDate
+  const timetable = Store.get('TIMETABLE') || [];
+  const testDay = Utils.getWeekday(testDate);
+  const updatedTimetable = timetable.filter(t => !(t.roomId === roomId && t.day === testDay && t.slot === 3));
+  updatedTimetable.push({
+    id: 'test-tt-dur',
+    roomId: roomId,
+    day: testDay,
+    slot: 3,
+    course: 'CSE326 Web Technology',
+    faculty: 'Dr. Test',
+    section: 'K22GF'
+  });
+  Store.set('TIMETABLE', updatedTimetable);
+
+  const slot1St = Availability.getSlotStatus(roomId, testDate, 1);
+  const slot2St = Availability.getSlotStatus(roomId, testDate, 2);
+  if (slot1St.status === 'Free' && slot2St.status === 'Free') {
+    const dur = Availability.getFreeDuration(roomId, testDate, 1);
+    assert.strictEqual(dur.isFreeNow, true);
+    assert.strictEqual(dur.freeSlotsCount, 2);
+    assert.strictEqual(dur.untilTime, '11:00');
+    assert.ok(dur.nextEvent, 'Must identify upcoming class event at slot 3');
+    assert.strictEqual(dur.nextEvent.slot, 3);
+  }
+});
+
+runTest('Bookings.checkInBooking(): Validates date guard and registers check-in on approved reservations', () => {
+  Store.resetToSample();
+  const today = Utils.getNow();
+  const todayStr = Utils.getLocalDateString(today);
+  const futureDateStr = getUpcomingFutureDate(3);
+
+  // Create approved booking for future date
+  const futureBk = {
+    id: 'test-checkin-future',
+    ref: 'BK-CHK-FUT',
+    roomId: 'room-32-101',
+    date: futureDateStr,
+    startSlot: 5,
+    endSlot: 5,
+    requesterName: 'Angel Seth',
+    requesterId: '12611041',
+    requesterType: 'Student',
+    purpose: 'Study Group',
+    status: Config.BOOKING_STATUS.APPROVED,
+    history: []
+  };
+  Store.addItem('BOOKINGS', futureBk);
+
+  // Premature check-in on future date must fail
+  const futRes = Bookings.checkInBooking('test-checkin-future');
+  assert.strictEqual(futRes.success, false);
+  assert.ok(futRes.message.includes('only permitted on the day of reservation'));
+
+  // Create approved booking for today
+  const todayBk = {
+    id: 'test-checkin-today',
+    ref: 'BK-CHK-TODAY',
+    roomId: 'room-32-101',
+    date: todayStr,
+    startSlot: 8,
+    endSlot: 9,
+    requesterName: 'Angel Seth',
+    requesterId: '12611041',
+    requesterType: 'Student',
+    purpose: 'Evening Hackathon',
+    status: Config.BOOKING_STATUS.APPROVED,
+    history: []
+  };
+  Store.addItem('BOOKINGS', todayBk);
+
+  // Check-in on reservation day must succeed
+  const todayRes = Bookings.checkInBooking('test-checkin-today');
+  assert.strictEqual(todayRes.success, true);
+  assert.ok(todayRes.message.includes('Successfully checked in'));
+
+  const checkedBooking = Bookings.getById('test-checkin-today');
+  assert.strictEqual(checkedBooking.checkedIn, true);
+  assert.ok(checkedBooking.checkedInAt, 'checkedInAt timestamp must be recorded');
+  const lastHistory = checkedBooking.history[checkedBooking.history.length - 1];
+  assert.strictEqual(lastHistory.status, 'Checked-In');
+
+  // Idempotent re-check-in returns success with alreadyCheckedIn flag
+  const reCheckRes = Bookings.checkInBooking('test-checkin-today');
+  assert.strictEqual(reCheckRes.success, true);
+  assert.strictEqual(reCheckRes.alreadyCheckedIn, true);
+});
+
 console.log('\n====================================================');
 console.log(`TEST SUMMARY: ${passedTests} / ${totalTests} tests passed (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('====================================================\n');

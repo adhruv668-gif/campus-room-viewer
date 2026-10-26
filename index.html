@@ -48,8 +48,8 @@
       </div>
 
       <div class="header-center">
-        <!-- Live Campus Clock -->
-        <div id="header-clock" class="header-clock" aria-label="Campus Time Clock" title="Current Campus Time">
+        <!-- Live Campus Clock Pill (Clickable for Schedule Preview / Clock Travel) -->
+        <div id="header-clock" class="header-clock header-clock-interactive" tabindex="0" role="button" aria-label="Campus Time Clock (Click to open time-travel preview)" title="Campus Time Clock • Click to preview different times">
           <span class="clock-icon" aria-hidden="true">&#128337;</span>
           <span id="clock-date" class="clock-date">-- --- ----</span>
           <span id="clock-time" class="clock-time">--:--:--</span>
@@ -95,43 +95,33 @@
       </div>
     </div>
 
-    <!-- Main Navigation Bar -->
+    <!-- Main Navigation Bar (Clean Purposeful Views) -->
     <nav id="site-nav" class="site-nav" aria-label="Main Navigation">
       <ul class="nav-list" role="menubar">
         <li class="nav-item" role="none">
-          <a href="#/dashboard" class="nav-link" role="menuitem" data-route="dashboard">
-            <span class="nav-icon" aria-hidden="true">&#128202;</span> Dashboard
+          <a href="#/availability" class="nav-link active" role="menuitem" data-route="availability">
+            <span class="nav-icon" aria-hidden="true">&#128197;</span> Explore &amp; Book
           </a>
         </li>
         <li class="nav-item" role="none">
-          <a href="#/availability" class="nav-link" role="menuitem" data-route="availability">
-            <span class="nav-icon" aria-hidden="true">&#128197;</span> Availability
-          </a>
-        </li>
-        <li class="nav-item" role="none">
-          <a href="#/find" class="nav-link" role="menuitem" data-route="find">
-            <span class="nav-icon" aria-hidden="true">&#128269;</span> Find a Room
-          </a>
-        </li>
-        <li class="nav-item" role="none">
-          <a href="#/request" class="nav-link" role="menuitem" data-route="request">
-            <span class="nav-icon" aria-hidden="true">&#9997;</span> Request a Room
+          <a href="#/availability?mode=freenow" class="nav-link" role="menuitem" data-route="freenow">
+            <span class="nav-icon" aria-hidden="true">&#9889;</span> Live Free Now
           </a>
         </li>
         <li class="nav-item" role="none">
           <a href="#/requests" class="nav-link" role="menuitem" data-route="requests">
             <span class="nav-icon" aria-hidden="true">&#128221;</span>
-            <span id="nav-requests-text">My Requests</span>
+            <span id="nav-requests-text">My Bookings</span>
           </a>
         </li>
         <li id="nav-admin-item" class="nav-item nav-admin hidden" role="none">
           <a href="#/admin" class="nav-link" role="menuitem" data-route="admin">
-            <span class="nav-icon" aria-hidden="true">&#9881;</span> Admin Panel
+            <span class="nav-icon" aria-hidden="true">&#9881;</span> Admin &amp; Operations
           </a>
         </li>
         <li class="nav-item" role="none">
-          <a href="#/help" class="nav-link" role="menuitem" data-route="help">
-            <span class="nav-icon" aria-hidden="true">&#10067;</span> Help &amp; Info
+          <a href="#/dashboard" class="nav-link" role="menuitem" data-route="dashboard">
+            <span class="nav-icon" aria-hidden="true">&#128202;</span> Analytics
           </a>
         </li>
       </ul>
@@ -244,6 +234,37 @@
       </footer>
     </div>
   </dialog>
+
+  <!-- Floating Multi-Slot Booking Bar (LibCal / Skedda style) -->
+  <div id="floating-booking-bar" class="floating-booking-bar hidden" aria-live="polite">
+    <div class="floating-bar-content">
+      <div class="floating-bar-details">
+        <span class="floating-bar-icon" aria-hidden="true">&#9889;</span>
+        <div>
+          <div id="floating-bar-room" class="floating-bar-room">Room 34-101</div>
+          <div id="floating-bar-time" class="floating-bar-time">Slot 2 (10:00 - 11:00) &bull; 1 hour</div>
+        </div>
+      </div>
+      <div class="floating-bar-actions">
+        <button id="floating-bar-clear" class="btn btn-sm btn-subtle" type="button">Clear</button>
+        <button id="floating-bar-book" class="btn btn-sm btn-primary" type="button">Continue to Book &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide-Over Booking Drawer (LibCal / Robin style) -->
+  <div id="booking-drawer-backdrop" class="drawer-backdrop hidden" aria-hidden="true">
+    <div id="booking-drawer" class="drawer-container" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <!-- Injected by Bookings.openBookingDrawer() -->
+    </div>
+  </div>
+
+  <!-- Digital Room Door Kiosk Display Overlay -->
+  <div id="door-kiosk-backdrop" class="kiosk-backdrop hidden" aria-hidden="true">
+    <div id="door-kiosk-container" class="kiosk-container" role="dialog" aria-modal="true" aria-label="Digital Room Door Sign">
+      <!-- Injected by Rooms.showDoorKiosk() -->
+    </div>
+  </div>
 
   <!-- Core JavaScript Modules (Strict Load Order) -->
   <script src="js/config.js"></script>

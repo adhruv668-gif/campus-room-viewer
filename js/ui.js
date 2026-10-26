@@ -304,6 +304,79 @@ const UI = {
   },
 
   /**
+   * Displays interactive schedule preview / campus time machine dialog.
+   */
+  showClockTravelModal: function() {
+    const settings = Store.get('SETTINGS') || {};
+    const now = Utils.getNow();
+    const todayStr = Utils.getLocalDateString(now);
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const curVal = settings.simulatedNow || `${todayStr}T${timeStr}`;
+
+    const modalHtml = `
+      <div class="time-travel-modal">
+        <p class="form-hint" style="margin-bottom: var(--space-3);">
+          Preview the campus timetable, room transitions, and live booking states at any past or future time point.
+        </p>
+
+        <div class="form-group">
+          <label for="travel-time-input" class="form-label">Virtual Campus Date &amp; Time:</label>
+          <input type="datetime-local" id="travel-time-input" class="form-input" value="${curVal}" />
+        </div>
+
+        <div style="margin-top: var(--space-3);">
+          <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 6px; font-weight: var(--font-bold);">QUICK PRESETS:</div>
+          <div style="display: flex; gap: var(--space-2); flex-wrap: wrap;">
+            <button type="button" class="btn btn-sm btn-subtle time-preset-btn" data-time="${todayStr}T09:15">Slot 1 (09:15)</button>
+            <button type="button" class="btn btn-sm btn-subtle time-preset-btn" data-time="${todayStr}T11:30">Slot 3 (11:30)</button>
+            <button type="button" class="btn btn-sm btn-subtle time-preset-btn" data-time="${todayStr}T14:15">Slot 6 (14:15)</button>
+            <button type="button" class="btn btn-sm btn-subtle time-preset-btn" data-time="${todayStr}T17:30">Slot 9 (17:30)</button>
+            <button type="button" class="btn btn-sm btn-subtle time-preset-btn" data-time="${todayStr}T19:00">Evening / Closed</button>
+          </div>
+        </div>
+
+        <div style="margin-top: var(--space-4); display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+          <button type="button" id="travel-reset-btn" class="btn btn-secondary">Restore Real Time</button>
+          <button type="button" id="travel-apply-btn" class="btn btn-primary">Apply Preview Time</button>
+        </div>
+      </div>
+    `;
+
+    UI.showModal('Campus Time Machine • Schedule Preview', modalHtml);
+
+    const input = document.getElementById('travel-time-input');
+    const presets = document.querySelectorAll('.time-preset-btn');
+    presets.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (input) input.value = btn.getAttribute('data-time');
+      });
+    });
+
+    const resetBtn = document.getElementById('travel-reset-btn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function() {
+        UI.closeModal();
+        UI.clearSimulatedTime();
+        if (typeof App !== 'undefined' && App.navigate) {
+          App.navigate(window.location.hash || '#/availability');
+        }
+      });
+    }
+
+    const applyBtn = document.getElementById('travel-apply-btn');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', function() {
+        if (!input || !input.value) return;
+        UI.closeModal();
+        UI.setSimulatedTime(input.value);
+        if (typeof App !== 'undefined' && App.navigate) {
+          App.navigate(window.location.hash || '#/availability');
+        }
+      });
+    }
+  },
+
+  /**
    * Synchronizes navigation bar role item visibility and active highlights.
    */
   renderNavbar: function() {
@@ -324,10 +397,23 @@ const UI = {
     }
 
     // Update active class on nav links
-    const currentRoute = (typeof App !== 'undefined' && App.getActiveRoute) ? App.getActiveRoute() : 'dashboard';
+    const currentRoute = (typeof App !== 'undefined' && App.getActiveRoute) ? App.getActiveRoute() : 'availability';
+    const isFreeNowHash = (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('mode=freenow'));
     const navLinks = document.querySelectorAll('.nav-link');
+
     navLinks.forEach(function(link) {
-      if (link.getAttribute('data-route') === currentRoute) {
+      const linkRoute = link.getAttribute('data-route');
+      let isMatch = false;
+
+      if (isFreeNowHash) {
+        isMatch = (linkRoute === 'freenow');
+      } else if (currentRoute === 'availability') {
+        isMatch = (linkRoute === 'availability');
+      } else {
+        isMatch = (linkRoute === currentRoute);
+      }
+
+      if (isMatch) {
         link.classList.add('active');
         link.setAttribute('aria-current', 'page');
       } else {

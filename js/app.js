@@ -50,6 +50,24 @@ const App = {
       UI.updateClock();
     }, 1000);
 
+    // 4b. Initialize interactive header clock pill for schedule preview time travel
+    const headerClock = document.getElementById('header-clock');
+    if (headerClock) {
+      headerClock.addEventListener('click', function() {
+        if (typeof UI !== 'undefined' && UI.showClockTravelModal) {
+          UI.showClockTravelModal();
+        }
+      });
+      headerClock.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (typeof UI !== 'undefined' && UI.showClockTravelModal) {
+            UI.showClockTravelModal();
+          }
+        }
+      });
+    }
+
     // 5. Initialize Role Switcher
     const roleSelect = document.getElementById('role-select');
     if (roleSelect) {
@@ -221,8 +239,8 @@ const App = {
       });
     }
 
-    // 11. Load Initial Route
-    const initialHash = window.location.hash || '#/dashboard';
+    // 11. Load Initial Route (Explore & Book as Default Landing Page)
+    const initialHash = window.location.hash || '#/availability';
     this.navigate(initialHash);
   },
 
@@ -372,10 +390,14 @@ const App = {
    * @param {string} routeHash
    */
   navigate: function(routeHash) {
-    const cleanHash = (routeHash || '#/dashboard').replace(/^#\/?/, '');
+    const cleanHash = (routeHash || '#/availability').replace(/^#\/?/, '');
     const parts = cleanHash.split('?');
-    const route = parts[0] || 'dashboard';
+    let route = parts[0] || 'availability';
     const queryParams = new URLSearchParams(parts[1] || '');
+
+    // Allow #freenow route to render inside availability section with freenow mode
+    const isFreeNow = (route === 'freenow') || (queryParams.get('mode') === 'freenow');
+    const viewSectionId = (route === 'freenow') ? 'availability' : route;
 
     this._activeRoute = route;
 
@@ -391,11 +413,11 @@ const App = {
       sec.hidden = true;
     });
 
-    const targetSection = document.getElementById(`view-${route}`);
+    const targetSection = document.getElementById(`view-${viewSectionId}`);
     if (!targetSection) {
-      // Fall back to dashboard if route unknown and not already attempting dashboard
-      if (route !== 'dashboard') {
-        this.navigate('#/dashboard');
+      // Fall back to availability if route unknown
+      if (route !== 'availability') {
+        this.navigate('#/availability');
       }
       return;
     }
@@ -404,12 +426,13 @@ const App = {
 
     // Update document title and accessibility focus
     const titleMap = {
-      dashboard: 'Dashboard',
-      availability: 'Availability Explorer',
+      dashboard: 'Analytics & Insights',
+      availability: isFreeNow ? 'Live Free Classroom Radar' : 'Explore & Book Spaces',
+      freenow: 'Live Free Classroom Radar',
       find: 'Find a Free Room',
       request: 'Request a Room',
-      requests: 'Booking Requests',
-      admin: 'Admin Portal',
+      requests: 'My Bookings Tracking',
+      admin: 'Admin & Operations Portal',
       help: 'Campus Booking Guidelines & Support'
     };
 
@@ -425,19 +448,20 @@ const App = {
     UI.renderNavbar();
 
     // Execute corresponding view renderer
-    const contentEl = document.getElementById(`${route}-content`);
+    const contentEl = document.getElementById(`${viewSectionId}-content`);
     if (!contentEl) return;
 
     if (route === 'dashboard') {
       if (typeof Dashboard !== 'undefined' && Dashboard.renderView) {
         Dashboard.renderView(contentEl);
       }
-    } else if (route === 'availability') {
+    } else if (route === 'availability' || route === 'freenow') {
       if (typeof Availability !== 'undefined' && Availability.renderGrid) {
         const dateParam = queryParams.get('date');
         const buildingParam = queryParams.get('building');
         const roomParam = queryParams.get('room');
-        Availability.renderGrid(contentEl, { date: dateParam, buildingId: buildingParam, searchQuery: roomParam });
+        const modeParam = isFreeNow ? 'freenow' : (queryParams.get('mode') || 'grid');
+        Availability.renderGrid(contentEl, { date: dateParam, buildingId: buildingParam, searchQuery: roomParam, mode: modeParam, viewMode: modeParam });
       }
     } else if (route === 'find') {
       if (typeof Availability !== 'undefined' && Availability.renderFinder) {

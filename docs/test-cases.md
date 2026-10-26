@@ -94,13 +94,15 @@
 | **AUT-48** | RFC 5545 `.ics` calendar invite generator | `Utils.generateICSContent(booking, room)` | Generates valid `BEGIN:VCALENDAR` / `BEGIN:VEVENT` with UID, DTSTAMP, and escaped metadata | **Pass** |
 | **AUT-49** | LPU UMS SSO session management | `App.setUmsUser()`, `App.getUmsUser()`, `App.clearUmsUser()` | Stores and clears UMS session in `sessionStorage` without privilege escalation | **Pass** |
 | **AUT-50** | Production de-academicization check | Scan `index.html` for "Viva Examiner", "CA1 Project", "CSE326" | 0 occurrences in `index.html`; official enterprise branding present | **Pass** |
+| **AUT-51** | Live Free Duration & Countdown | `Availability.getFreeDuration(roomId, date, slot)` | Computes consecutive free slots, countdown text, untilTime, and upcoming class event | **Pass** |
+| **AUT-52** | On-Site Check-In Verification | `Bookings.checkInBooking(id)` on approved reservation | Enforces reservation day guard; updates `checkedIn: true` and logs history trail | **Pass** |
 
 ---
 
 ## 2. Executed Failed Tests
 
 - **Failed Count:** **0**
-- All 50 automated tests execute synchronously and pass cleanly without unhandled rejections or runtime exceptions.
+- All 52 automated tests execute synchronously and pass cleanly without unhandled rejections or runtime exceptions.
 
 ---
 

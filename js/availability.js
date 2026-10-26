@@ -212,6 +212,107 @@ const Availability = {
   },
 
   /**
+   * Computes consecutive free duration and upcoming schedule transition for a room.
+   * Answers: "How long will this room stay free before the next scheduled class/event?"
+   * 
+   * @param {string} roomId
+   * @param {string} [dateStr]
+   * @param {number} [fromSlot]
+   * @returns {{
+   *   isFreeNow: boolean,
+   *   freeSlotsCount: number,
+   *   durationMinutes: number,
+   *   untilTime: string,
+   *   untilSlot: number,
+   *   nextEvent: object|null,
+   *   nextFreeSlot: number|null,
+   *   nextFreeTime: string|null,
+   *   countdownText: string
+   * }}
+   */
+  getFreeDuration: function(roomId, dateStr, fromSlot) {
+    const todayStr = Utils.getLocalDateString(Utils.getNow());
+    const date = dateStr || todayStr;
+    const currentSlot = Utils.getCurrentSlot();
+    const start = fromSlot || currentSlot || 1;
+
+    const startStatus = this.getSlotStatus(roomId, date, start);
+    const isFreeNow = (startStatus.status === 'Free' && !startStatus.isPast);
+
+    let freeSlotsCount = 0;
+    let untilSlot = start;
+    let untilTime = '18:00';
+    let nextEvent = null;
+    let nextFreeSlot = null;
+    let nextFreeTime = null;
+
+    if (isFreeNow) {
+      for (let s = start; s <= 9; s++) {
+        const st = this.getSlotStatus(roomId, date, s);
+        if (st.status === 'Free' && !st.isPast) {
+          freeSlotsCount++;
+          untilSlot = s;
+          const sDef = Config.SLOTS.find(function(item) { return item.id === s; });
+          if (sDef) untilTime = sDef.end;
+        } else {
+          const sDef = Config.SLOTS.find(function(item) { return item.id === s; });
+          nextEvent = {
+            slot: s,
+            time: sDef ? sDef.start : '',
+            status: st.status,
+            details: st.details
+          };
+          break;
+        }
+      }
+    } else {
+      for (let s = start + 1; s <= 9; s++) {
+        const st = this.getSlotStatus(roomId, date, s);
+        if (st.status === 'Free' && !st.isPast) {
+          nextFreeSlot = s;
+          const sDef = Config.SLOTS.find(function(item) { return item.id === s; });
+          nextFreeTime = sDef ? sDef.start : null;
+          break;
+        }
+      }
+      const curDef = Config.SLOTS.find(function(item) { return item.id === start; });
+      nextEvent = {
+        slot: start,
+        time: curDef ? curDef.start : '',
+        status: startStatus.status,
+        details: startStatus.details
+      };
+    }
+
+    let countdownText = '';
+    if (isFreeNow) {
+      if (freeSlotsCount >= (10 - start)) {
+        countdownText = 'Free rest of the day';
+      } else if (freeSlotsCount === 1) {
+        countdownText = `Free for 1 hr (until ${untilTime})`;
+      } else {
+        countdownText = `Free for next ${freeSlotsCount} hrs (until ${untilTime})`;
+      }
+    } else if (nextFreeTime) {
+      countdownText = `Busy • Free at ${nextFreeTime}`;
+    } else {
+      countdownText = 'Occupied for rest of day';
+    }
+
+    return {
+      isFreeNow: isFreeNow,
+      freeSlotsCount: freeSlotsCount,
+      durationMinutes: freeSlotsCount * 60,
+      untilSlot: untilSlot,
+      untilTime: untilTime,
+      nextEvent: nextEvent,
+      nextFreeSlot: nextFreeSlot,
+      nextFreeTime: nextFreeTime,
+      countdownText: countdownText
+    };
+  },
+
+  /**
    * Finds all rooms free for the ENTIRE chosen slot range.
    * Best fit: smallest capacity that accommodates attendees.
    * Also computes partial matches if exact match unavailable.
@@ -365,6 +466,8 @@ const Availability = {
     const viewPrefs = settings.viewPrefs || { filters: {}, viewMode: 'grid' };
     const savedFilters = (typeof App !== 'undefined' && App.state && App.state.filters && App.state.filters.grid) || viewPrefs.filters || {};
 
+    const initialMode = (filterOverrides && (filterOverrides.mode || filterOverrides.viewMode)) || savedFilters.viewMode || viewPrefs.viewMode || 'grid';
+
     const activeFilters = {
       date: (filterOverrides && filterOverrides.date) || savedFilters.date || Utils.getLocalDateString(Utils.getNow()),
       buildingId: (filterOverrides && filterOverrides.buildingId) || savedFilters.buildingId || '',
@@ -372,8 +475,8 @@ const Availability = {
       minCapacity: savedFilters.minCapacity || '',
       facilities: savedFilters.facilities || [],
       onlyFree: Boolean(savedFilters.onlyFree),
-      searchQuery: savedFilters.searchQuery || '',
-      viewMode: savedFilters.viewMode || viewPrefs.viewMode || 'grid'
+      searchQuery: (filterOverrides && filterOverrides.searchQuery) || savedFilters.searchQuery || '',
+      viewMode: initialMode
     };
 
     const buildings = Rooms.getAllBuildings();
@@ -390,23 +493,53 @@ const Availability = {
       typeOptions += `<option value="${t}" ${t === activeFilters.type ? 'selected' : ''}>${t}</option>`;
     });
 
+    const now = Utils.getNow();
+    const todayStr = Utils.getLocalDateString(now);
+
+    // Compute relative dates for quick pills
+    const dTomorrow = Utils.parseLocalDate(todayStr);
+    dTomorrow.setDate(dTomorrow.getDate() + 1);
+    const tomorrowStr = Utils.getLocalDateString(dTomorrow);
+
+    const dPlus2 = Utils.parseLocalDate(todayStr);
+    dPlus2.setDate(dPlus2.getDate() + 2);
+    const plus2Str = Utils.getLocalDateString(dPlus2);
+
+    const dPlus3 = Utils.parseLocalDate(todayStr);
+    dPlus3.setDate(dPlus3.getDate() + 3);
+    const plus3Str = Utils.getLocalDateString(dPlus3);
+
     containerEl.innerHTML = `
-      <!-- Filter Toolbar -->
+      <!-- Filter Toolbar & View Mode Switcher -->
       <div class="card" style="margin-bottom: var(--space-4);">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3);">
-          <!-- Date Navigator -->
-          <div style="display: flex; align-items: center; gap: var(--space-2);">
-            <button id="avail-prev-date-btn" class="btn btn-sm btn-secondary" type="button" aria-label="Previous Day">&larr; Prev</button>
-            <input type="date" id="avail-date-input" class="form-input" style="width: auto; min-height: 34px;" value="${Utils.escapeHTML(activeFilters.date)}" />
-            <button id="avail-next-date-btn" class="btn btn-sm btn-secondary" type="button" aria-label="Next Day">Next &rarr;</button>
-            <button id="avail-today-date-btn" class="btn btn-sm btn-subtle" type="button">Today</button>
+          
+          <!-- Mode Switcher Tabs (LibCal Timeline vs Free Right Now Radar) -->
+          <div class="btn-group" role="tablist" style="display: inline-flex; gap: 4px;">
+            <button id="avail-tab-grid" class="btn btn-sm ${activeFilters.viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}" type="button" role="tab" aria-selected="${activeFilters.viewMode === 'grid'}">
+              &#128197; Timeline Grid
+            </button>
+            <button id="avail-tab-freenow" class="btn btn-sm ${activeFilters.viewMode === 'freenow' ? 'btn-primary' : 'btn-secondary'}" type="button" role="tab" aria-selected="${activeFilters.viewMode === 'freenow'}">
+              &#9889; Free Right Now
+            </button>
+            <button id="avail-tab-cards" class="btn btn-sm ${activeFilters.viewMode === 'cards' ? 'btn-primary' : 'btn-secondary'}" type="button" role="tab" aria-selected="${activeFilters.viewMode === 'cards'}">
+              &#128196; Room Cards
+            </button>
           </div>
 
-          <!-- View Mode & Action Toggle -->
-          <div style="display: flex; align-items: center; gap: var(--space-2);">
-            <button id="avail-mode-toggle" class="btn btn-sm btn-secondary" type="button">
-              ${activeFilters.viewMode === 'grid' ? '&#128196; Switch to Cards' : '&#9638; Switch to Grid'}
-            </button>
+          <!-- Date Navigator & Quick Day Pills -->
+          <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <button id="avail-prev-date-btn" class="btn btn-sm btn-secondary" type="button" aria-label="Previous Day">&larr;</button>
+              <input type="date" id="avail-date-input" class="form-input" style="width: auto; min-height: 32px; padding: 4px 8px;" value="${Utils.escapeHTML(activeFilters.date)}" />
+              <button id="avail-next-date-btn" class="btn btn-sm btn-secondary" type="button" aria-label="Next Day">&rarr;</button>
+            </div>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" class="btn btn-xs ${activeFilters.date === todayStr ? 'btn-primary' : 'btn-subtle'} avail-quick-date" data-date="${todayStr}">Today</button>
+              <button type="button" class="btn btn-xs ${activeFilters.date === tomorrowStr ? 'btn-primary' : 'btn-subtle'} avail-quick-date" data-date="${tomorrowStr}">Tmrw</button>
+              <button type="button" class="btn btn-xs ${activeFilters.date === plus2Str ? 'btn-primary' : 'btn-subtle'} avail-quick-date" data-date="${plus2Str}">+2d</button>
+              <button type="button" class="btn btn-xs ${activeFilters.date === plus3Str ? 'btn-primary' : 'btn-subtle'} avail-quick-date" data-date="${plus3Str}">+3d</button>
+            </div>
             <button id="avail-print-btn" class="btn btn-sm btn-subtle" type="button" title="Print Timetable Grid">&#128424; Print</button>
           </div>
         </div>
@@ -439,8 +572,8 @@ const Availability = {
 
       <!-- Accessible Color Legend -->
       <div class="card" style="margin-top: var(--space-4); display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: center; font-size: var(--text-xs);">
-        <span class="badge badge-free">&#9989; Free</span>
-        <span class="badge badge-class">&#128218; Timetable Class</span>
+        <span class="badge badge-free">&#9989; Free Slot (Click to Book)</span>
+        <span class="badge badge-class">&#128218; Timetable Lecture</span>
         <span class="badge badge-booked">&#128100; Approved Booking</span>
         <span class="badge badge-requested">&#9203; Pending Request</span>
         <span class="badge badge-maint">&#128295; Maintenance</span>
@@ -497,6 +630,8 @@ const Availability = {
 
       if (activeFilters.viewMode === 'grid') {
         self._renderBuildingGridGroups(displayEl, filtered, activeFilters.date, buildings);
+      } else if (activeFilters.viewMode === 'freenow') {
+        self.renderFreeNowCards(displayEl, filtered, activeFilters.date);
       } else {
         self.renderCards(displayEl, filtered, activeFilters.date);
       }
@@ -552,10 +687,19 @@ const Availability = {
       renderContent();
     });
 
-    document.getElementById('avail-today-date-btn').addEventListener('click', function() {
-      activeFilters.date = Utils.getLocalDateString(Utils.getNow());
-      dateInput.value = activeFilters.date;
-      renderContent();
+    const quickDateBtns = containerEl.querySelectorAll('.avail-quick-date');
+    quickDateBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        activeFilters.date = btn.getAttribute('data-date');
+        dateInput.value = activeFilters.date;
+        quickDateBtns.forEach(b => {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-subtle');
+        });
+        btn.classList.remove('btn-subtle');
+        btn.classList.add('btn-primary');
+        renderContent();
+      });
     });
 
     document.getElementById('avail-bldg-select').addEventListener('change', function(e) {
@@ -600,23 +744,69 @@ const Availability = {
       UI.showToast('Availability filters cleared.', 'info');
     });
 
-    document.getElementById('avail-mode-toggle').addEventListener('click', function() {
-      activeFilters.viewMode = activeFilters.viewMode === 'grid' ? 'cards' : 'grid';
-      this.innerHTML = activeFilters.viewMode === 'grid' ? '&#128196; Switch to Cards' : '&#9638; Switch to Grid';
+    // Mode tab toggling
+    const tabGrid = document.getElementById('avail-tab-grid');
+    const tabFreeNow = document.getElementById('avail-tab-freenow');
+    const tabCards = document.getElementById('avail-tab-cards');
+
+    const updateTabs = function(mode) {
+      activeFilters.viewMode = mode;
+      [tabGrid, tabFreeNow, tabCards].forEach(t => {
+        if (t) {
+          t.classList.remove('btn-primary');
+          t.classList.add('btn-secondary');
+          t.setAttribute('aria-selected', 'false');
+        }
+      });
+      const activeBtn = mode === 'grid' ? tabGrid : (mode === 'freenow' ? tabFreeNow : tabCards);
+      if (activeBtn) {
+        activeBtn.classList.remove('btn-secondary');
+        activeBtn.classList.add('btn-primary');
+        activeBtn.setAttribute('aria-selected', 'true');
+      }
       renderContent();
-    });
+    };
+
+    if (tabGrid) tabGrid.addEventListener('click', () => updateTabs('grid'));
+    if (tabFreeNow) tabFreeNow.addEventListener('click', () => updateTabs('freenow'));
+    if (tabCards) tabCards.addEventListener('click', () => updateTabs('cards'));
 
     document.getElementById('avail-print-btn').addEventListener('click', function() {
       window.print();
     });
 
-    // Cell click and keyboard delegation for slot inspector
+    // Cell click and keyboard delegation for slot booking drawer / inspector
     containerEl.addEventListener('click', function(e) {
+      const specBtn = e.target.closest('.room-spec-btn');
+      if (specBtn) {
+        e.stopPropagation();
+        const roomId = specBtn.getAttribute('data-room-id');
+        Rooms.showRoomSpecModal(roomId);
+        return;
+      }
+
+      const kioskBtn = e.target.closest('.room-kiosk-btn');
+      if (kioskBtn) {
+        e.stopPropagation();
+        const roomId = kioskBtn.getAttribute('data-room-id');
+        Rooms.showDoorKiosk(roomId);
+        return;
+      }
+
       const cell = e.target.closest('.grid-cell');
       if (cell) {
         const roomId = cell.getAttribute('data-room-id');
         const slot = parseInt(cell.getAttribute('data-slot'), 10);
-        self.renderSlotDetails(roomId, activeFilters.date, slot);
+        const statusInfo = self.getSlotStatus(roomId, activeFilters.date, slot);
+        if (statusInfo.status === 'Free' && !statusInfo.isPast) {
+          if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
+            Bookings.openBookingDrawer(roomId, activeFilters.date, slot, slot);
+          } else {
+            self.renderSlotDetails(roomId, activeFilters.date, slot);
+          }
+        } else {
+          self.renderSlotDetails(roomId, activeFilters.date, slot);
+        }
       }
     });
 
@@ -627,7 +817,16 @@ const Availability = {
           e.preventDefault();
           const roomId = cell.getAttribute('data-room-id');
           const slot = parseInt(cell.getAttribute('data-slot'), 10);
-          self.renderSlotDetails(roomId, activeFilters.date, slot);
+          const statusInfo = self.getSlotStatus(roomId, activeFilters.date, slot);
+          if (statusInfo.status === 'Free' && !statusInfo.isPast) {
+            if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
+              Bookings.openBookingDrawer(roomId, activeFilters.date, slot, slot);
+            } else {
+              self.renderSlotDetails(roomId, activeFilters.date, slot);
+            }
+          } else {
+            self.renderSlotDetails(roomId, activeFilters.date, slot);
+          }
         }
       }
     });
@@ -655,6 +854,7 @@ const Availability = {
 
       let tableRows = '';
       bldgRooms.forEach(function(room) {
+        const liveDur = Availability.getFreeDuration(room.id, dateStr);
         let cellTds = '';
         for (let s = 1; s <= 9; s++) {
           const statusInfo = Availability.getSlotStatus(room.id, dateStr, s);
@@ -664,33 +864,77 @@ const Availability = {
           if (statusInfo.isPast) cellClass += ' cell-past';
           if (isCurrent) cellClass += ' cell-current-slot';
 
-          const iconMap = {
-            Free: '&#9989;',
-            Class: '&#128218;',
-            Booked: '&#128100;',
-            Requested: '&#9203;',
-            Maintenance: '&#128295;'
-          };
+          let cellInner = '';
+          if (statusInfo.status === 'Class') {
+            const cls = statusInfo.details || {};
+            const code = cls.course ? cls.course.split(' ')[0] : 'Class';
+            cellInner = `
+              <div class="grid-cell-content">
+                <span class="cell-class-course">${Utils.escapeHTML(code)}</span>
+                <span class="cell-class-section">${Utils.escapeHTML(cls.section || '')}</span>
+              </div>
+            `;
+          } else if (statusInfo.status === 'Booked') {
+            const bk = statusInfo.details || {};
+            cellInner = `
+              <div class="grid-cell-content">
+                <span class="cell-booked-badge">&#128100; Reserved</span>
+                <span class="cell-booked-ref">${Utils.escapeHTML(bk.ref || '')}</span>
+              </div>
+            `;
+          } else if (statusInfo.status === 'Requested') {
+            cellInner = `
+              <div class="grid-cell-content">
+                <span class="grid-cell-icon" aria-hidden="true">&#9203;</span>
+                <span class="grid-cell-label">${statusInfo.pendingCount || 1} Req</span>
+              </div>
+            `;
+          } else if (statusInfo.status === 'Maintenance') {
+            cellInner = `
+              <div class="grid-cell-content">
+                <span class="grid-cell-icon" aria-hidden="true">&#128295;</span>
+                <span class="grid-cell-label">Maint</span>
+              </div>
+            `;
+          } else {
+            // Free
+            cellInner = `
+              <div class="grid-cell-content">
+                <span class="grid-cell-icon" aria-hidden="true">&#9989;</span>
+                <span class="grid-cell-label">${statusInfo.isPast ? 'Free' : '+ Book'}</span>
+              </div>
+            `;
+          }
 
           const slotTime = Utils.formatSlotTime(s);
-          const bookingPrompt = (statusInfo.status === 'Free' && !statusInfo.isPast) ? ' - Click or press enter to book' : '';
+          const bookingPrompt = (statusInfo.status === 'Free' && !statusInfo.isPast) ? ' - Click to fast-book' : '';
 
           cellTds += `
             <td class="grid-cell ${cellClass}" data-room-id="${Utils.escapeHTML(room.id)}" data-slot="${s}" tabindex="0" role="button" aria-label="Room ${Utils.escapeHTML(room.roomNo)}, ${slotTime}, ${Utils.escapeHTML(statusInfo.status)}${bookingPrompt}">
-              <div class="grid-cell-content">
-                <span class="grid-cell-icon" aria-hidden="true">${iconMap[statusInfo.status] || ''}</span>
-                <span class="grid-cell-label">${Utils.escapeHTML(statusInfo.status)}</span>
-              </div>
+              ${cellInner}
             </td>
           `;
         }
 
+        const liveBadgeClass = liveDur.isFreeNow ? 'status-dot-free' : 'status-dot-busy';
+        const liveStatusText = liveDur.isFreeNow ? `Free now • ${liveDur.countdownText}` : (liveDur.nextFreeTime ? `In Class • Free at ${liveDur.nextFreeTime}` : 'In Class');
+
         tableRows += `
           <tr>
-            <td class="grid-col-room">
-              <strong>${Utils.escapeHTML(room.roomNo)}</strong> &bull; ${Utils.escapeHTML(room.name)}
-              <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">
-                ${Utils.escapeHTML(room.type)} &bull; ${Utils.escapeHTML(String(room.capacity))} seats
+            <td class="grid-col-room sticky-room-col">
+              <div class="room-col-header">
+                <span class="room-status-dot ${liveBadgeClass}" title="${Utils.escapeHTML(liveStatusText)}"></span>
+                <strong>Room ${Utils.escapeHTML(room.roomNo)}</strong>
+                <span class="room-type-tag">${Utils.escapeHTML(room.type)}</span>
+              </div>
+              <div class="room-col-name">${Utils.escapeHTML(room.name)}</div>
+              <div class="room-col-meta">
+                <span>&#128101; ${Utils.escapeHTML(String(room.capacity))}</span>
+                <span>${(room.facilities || []).slice(0, 2).map(function(f) { return Utils.escapeHTML(f); }).join(', ')}</span>
+              </div>
+              <div class="room-col-actions">
+                <button type="button" class="btn-text-link room-spec-btn" data-room-id="${Utils.escapeHTML(room.id)}" title="View room specifications and equipment">&#9432; Specs</button>
+                <button type="button" class="btn-text-link room-kiosk-btn" data-room-id="${Utils.escapeHTML(room.id)}" title="Open digital door tablet sign">&#128682; Door Sign</button>
               </div>
             </td>
             ${cellTds}
@@ -708,7 +952,7 @@ const Availability = {
             <table class="grid-table">
               <thead>
                 <tr>
-                  <th class="grid-col-room" scope="col">Room Details</th>
+                  <th class="grid-col-room sticky-room-col" scope="col">Room &amp; Specs</th>
                   ${Config.SLOTS.map(function(s) {
                     const isCurr = isToday && (currentSlot === s.id);
                     return `<th scope="col" class="${isCurr ? 'cell-current-slot' : ''}">${s.label}<br><span style="font-weight: normal; font-size: 0.65rem;">${s.start}-${s.end}</span></th>`;
@@ -725,6 +969,222 @@ const Availability = {
     });
 
     containerEl.innerHTML = html;
+  },
+
+  /**
+   * Renders the Empty Classroom Finder / Free Right Now Radar View.
+   * Sorted by longest free duration with dynamic countdown banners.
+   * @param {HTMLElement} containerEl
+   * @param {object[]} rooms
+   * @param {string} dateStr
+   */
+  renderFreeNowCards: function(containerEl, rooms, dateStr) {
+    const todayStr = Utils.getLocalDateString(Utils.getNow());
+    const isToday = (dateStr === todayStr);
+    const currentSlot = Utils.getCurrentSlot() || 1;
+
+    // Evaluate each room
+    const categorized = rooms.map(function(room) {
+      const duration = Availability.getFreeDuration(room.id, dateStr, currentSlot);
+      return {
+        room: room,
+        duration: duration,
+        building: Rooms.getBuildingById(room.buildingId)
+      };
+    });
+
+    const freeNow = categorized.filter(function(item) {
+      return item.duration.isFreeNow;
+    });
+
+    // Sort freeNow rooms by freeSlotsCount descending (longest free first)
+    freeNow.sort(function(a, b) {
+      return b.duration.freeSlotsCount - a.duration.freeSlotsCount;
+    });
+
+    const openingSoon = categorized.filter(function(item) {
+      return !item.duration.isFreeNow && item.duration.nextFreeSlot !== null;
+    });
+    openingSoon.sort(function(a, b) {
+      return (a.duration.nextFreeSlot || 99) - (b.duration.nextFreeSlot || 99);
+    });
+
+    let html = `
+      <div class="freenow-dashboard">
+        <div class="freenow-header-banner card">
+          <div class="freenow-summary-metrics">
+            <div class="freenow-metric">
+              <span class="freenow-metric-val green">${freeNow.length}</span>
+              <span class="freenow-metric-lbl">Rooms Free Right Now</span>
+            </div>
+            <div class="freenow-metric">
+              <span class="freenow-metric-val orange">${openingSoon.length}</span>
+              <span class="freenow-metric-lbl">Opening Soon</span>
+            </div>
+            <div class="freenow-metric">
+              <span class="freenow-metric-val blue">${rooms.length}</span>
+              <span class="freenow-metric-lbl">Total Rooms Tracked</span>
+            </div>
+          </div>
+          <div class="freenow-live-info">
+            <span class="pulse-dot green"></span>
+            <span>Live Radar Active &bull; ${isToday ? `Current Slot ${currentSlot} (${Utils.formatSlotTime(currentSlot)})` : Utils.formatDate(dateStr)}</span>
+          </div>
+        </div>
+
+        <h3 class="freenow-section-title">&#128994; Available Right Now &bull; Walk-In &amp; Study Friendly (${freeNow.length})</h3>
+    `;
+
+    if (freeNow.length === 0) {
+      html += `
+        <div class="empty-state card">
+          <div class="empty-icon">&#128269;</div>
+          <h4 class="empty-title">All rooms are currently occupied</h4>
+          <p class="empty-desc">Check the "Opening Soon" section below to see which classrooms free up next.</p>
+        </div>
+      `;
+    } else {
+      html += `<div class="freenow-cards-grid">`;
+      freeNow.forEach(function(item) {
+        const r = item.room;
+        const dur = item.duration;
+        const bldg = item.building;
+        const isRestOfDay = dur.freeSlotsCount >= (10 - currentSlot);
+        const bannerClass = isRestOfDay ? 'freenow-banner-long' : 'freenow-banner-standard';
+
+        html += `
+          <div class="freenow-card card">
+            <div class="freenow-badge-banner ${bannerClass}">
+              <span class="pulse-dot green"></span>
+              <strong>${isRestOfDay ? 'FREE REST OF THE DAY' : `FREE FOR NEXT ${dur.freeSlotsCount} ${dur.freeSlotsCount === 1 ? 'HOUR' : 'HOURS'} (Until ${dur.untilTime})`}</strong>
+            </div>
+
+            <div class="freenow-card-body">
+              <div class="freenow-card-header">
+                <div>
+                  <h3 class="freenow-room-no">Room ${Utils.escapeHTML(r.roomNo)}</h3>
+                  <div class="freenow-bldg-name">${Utils.escapeHTML(bldg ? bldg.name : '')} &bull; ${Utils.escapeHTML(r.name)}</div>
+                </div>
+                <span class="badge badge-free">&#9989; Available</span>
+              </div>
+
+              <div class="freenow-tags">
+                <span class="chip">${Utils.escapeHTML(r.type)}</span>
+                <span class="chip">&#128101; ${Utils.escapeHTML(String(r.capacity))} seats</span>
+                <span class="chip">&#127970; Floor ${Utils.escapeHTML(String(r.floor))}</span>
+              </div>
+
+              <div class="freenow-upcoming-event">
+                <strong>Next event:</strong>
+                ${dur.nextEvent ? `<span class="text-orange">&#128218; ${Utils.escapeHTML(dur.nextEvent.details ? dur.nextEvent.details.course : 'Class')} at ${dur.nextEvent.time}</span>` : '<span class="text-green">&#10003; No further classes today</span>'}
+              </div>
+
+              <div class="freenow-facilities">
+                <span class="form-hint">${(r.facilities || []).join(' &bull; ') || 'Standard Classroom setup'}</span>
+              </div>
+
+              <div class="freenow-card-actions">
+                <button type="button" class="btn btn-sm btn-primary freenow-book-btn" data-room-id="${Utils.escapeHTML(r.id)}" data-start="${currentSlot}" data-end="${dur.untilSlot}">
+                  &#9889; Quick Reserve
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary freenow-kiosk-btn" data-room-id="${Utils.escapeHTML(r.id)}">
+                  &#128682; Door Sign
+                </button>
+                <button type="button" class="btn btn-sm btn-subtle freenow-spec-btn" data-room-id="${Utils.escapeHTML(r.id)}">
+                  &#9432; Specs
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      html += `</div>`;
+    }
+
+    if (openingSoon.length > 0) {
+      html += `
+        <h3 class="freenow-section-title" style="margin-top: var(--space-6);">&#9200; Opening Soon &bull; Classes Wrapping Up (${openingSoon.length})</h3>
+        <div class="freenow-cards-grid">
+      `;
+      openingSoon.forEach(function(item) {
+        const r = item.room;
+        const dur = item.duration;
+        const bldg = item.building;
+        const currentEvent = dur.nextEvent;
+
+        html += `
+          <div class="freenow-card card card-upcoming">
+            <div class="freenow-badge-banner freenow-banner-busy">
+              <span class="pulse-dot orange"></span>
+              <strong>IN CLASS NOW &bull; FREE AT ${dur.nextFreeTime}</strong>
+            </div>
+
+            <div class="freenow-card-body">
+              <div class="freenow-card-header">
+                <div>
+                  <h3 class="freenow-room-no">Room ${Utils.escapeHTML(r.roomNo)}</h3>
+                  <div class="freenow-bldg-name">${Utils.escapeHTML(bldg ? bldg.name : '')} &bull; ${Utils.escapeHTML(r.name)}</div>
+                </div>
+                <span class="badge badge-class">&#128218; In Session</span>
+              </div>
+
+              <div class="freenow-upcoming-event">
+                <strong>Current lecture:</strong>
+                ${currentEvent ? `<span class="text-muted">${Utils.escapeHTML(currentEvent.details ? currentEvent.details.course : 'Academic Class')}</span>` : 'Class in progress'}
+              </div>
+
+              <div class="freenow-card-actions">
+                <button type="button" class="btn btn-sm btn-secondary freenow-book-btn" data-room-id="${Utils.escapeHTML(r.id)}" data-start="${dur.nextFreeSlot}" data-end="${dur.nextFreeSlot}">
+                  Reserve for ${dur.nextFreeTime}
+                </button>
+                <button type="button" class="btn btn-sm btn-subtle freenow-spec-btn" data-room-id="${Utils.escapeHTML(r.id)}">
+                  &#9432; Specs
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+    containerEl.innerHTML = html;
+
+    // Wire action buttons
+    const bookBtns = containerEl.querySelectorAll('.freenow-book-btn');
+    bookBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const roomId = btn.getAttribute('data-room-id');
+        const start = parseInt(btn.getAttribute('data-start'), 10) || 1;
+        const end = parseInt(btn.getAttribute('data-end'), 10) || start;
+        if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
+          Bookings.openBookingDrawer(roomId, dateStr, start, end);
+        } else {
+          window.location.hash = `#/request?roomId=${encodeURIComponent(roomId)}&date=${encodeURIComponent(dateStr)}&startSlot=${start}&endSlot=${end}`;
+        }
+      });
+    });
+
+    const kioskBtns = containerEl.querySelectorAll('.freenow-kiosk-btn');
+    kioskBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const roomId = btn.getAttribute('data-room-id');
+        if (typeof Rooms !== 'undefined' && Rooms.showDoorKiosk) {
+          Rooms.showDoorKiosk(roomId);
+        }
+      });
+    });
+
+    const specBtns = containerEl.querySelectorAll('.freenow-spec-btn');
+    specBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const roomId = btn.getAttribute('data-room-id');
+        if (typeof Rooms !== 'undefined' && Rooms.showRoomSpecModal) {
+          Rooms.showRoomSpecModal(roomId);
+        }
+      });
+    });
   },
 
   /**
