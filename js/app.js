@@ -21,7 +21,7 @@
 const App = {
   _activeRoute: 'dashboard',
   _clockInterval: null,
-  _umsUserMemory: null,
+  _userMemory: null,
   state: {
     filters: {
       grid: {},
@@ -267,10 +267,10 @@ const App = {
     } else if (newRole === Config.ROLES.FACULTY) {
       settings.lastRequester = {
         type: 'Faculty',
-        name: 'Dr. Rajesh Kumar',
-        id: 'FAC1001',
-        email: 'rajesh.fac1001@campus.edu',
-        phone: '9876543211'
+        name: 'Dr. Rajesh Sharma',
+        id: 'FAC1024',
+        email: 'rajesh.fac1024@campus.edu',
+        phone: '9876543213'
       };
     } else if (newRole === Config.ROLES.ADMIN) {
       settings.lastRequester = {
@@ -329,32 +329,32 @@ const App = {
   },
 
   /**
-   * Retrieves active UMS user session profile.
+   * Retrieves active user profile.
    * @returns {{ id: string, name: string, role: string, department?: string, email?: string, phone?: string } | null}
    */
-  getUmsUser: function() {
+  getUserProfile: function() {
     try {
       if (typeof sessionStorage !== 'undefined') {
-        const raw = sessionStorage.getItem('CAMPUS_UMS_USER');
+        const raw = sessionStorage.getItem('CAMPUS_USER_PROFILE');
         if (raw) return JSON.parse(raw);
       }
     } catch (e) {}
-    return this._umsUserMemory || null;
+    return this._userMemory || null;
   },
 
   /**
-   * Sets active UMS user profile and synchronizes navbar pill.
+   * Sets active user profile.
    * @param {object|null} userObj
    * @returns {object|null}
    */
-  setUmsUser: function(userObj) {
-    this._umsUserMemory = userObj;
+  setUserProfile: function(userObj) {
+    this._userMemory = userObj;
     try {
       if (typeof sessionStorage !== 'undefined') {
         if (userObj) {
-          sessionStorage.setItem('CAMPUS_UMS_USER', JSON.stringify(userObj));
+          sessionStorage.setItem('CAMPUS_USER_PROFILE', JSON.stringify(userObj));
         } else {
-          sessionStorage.removeItem('CAMPUS_UMS_USER');
+          sessionStorage.removeItem('CAMPUS_USER_PROFILE');
         }
       }
     } catch (e) {}
@@ -379,8 +379,6 @@ const App = {
     }
     Store.set('SETTINGS', s);
 
-    this.updateUmsNavbarPill();
-
     // Re-render requests view if currently active to dynamically update ID filter and subtitle
     if (this._activeRoute === 'requests') {
       const contentEl = document.getElementById('requests-content');
@@ -392,35 +390,17 @@ const App = {
   },
 
   /**
-   * Clears active UMS user session.
+   * Clears active user profile.
    */
-  clearUmsUser: function() {
-    this.setUmsUser(null);
+  clearUserProfile: function() {
+    this.setUserProfile(null);
   },
 
-  /**
-   * Synchronizes header UMS profile pill display with current session.
-   */
-  updateUmsNavbarPill: function() {
-    if (typeof document === 'undefined') return;
-    const pill = document.getElementById('ums-profile-pill');
-    if (!pill) return;
-    const user = this.getUmsUser();
-    const nameEl = document.getElementById('ums-user-name');
-    const subEl = document.getElementById('ums-user-sub');
-
-    if (user) {
-      pill.classList.add('signed-in');
-      if (nameEl) nameEl.textContent = user.name;
-      if (subEl) subEl.textContent = `${user.id} • ${user.role}`;
-      pill.setAttribute('title', `Signed in as ${user.name} (${user.id} • ${user.role}) - Click to switch profile`);
-    } else {
-      pill.classList.remove('signed-in');
-      if (nameEl) nameEl.textContent = 'UMS Sign In';
-      if (subEl) subEl.textContent = 'Click to switch';
-      pill.setAttribute('title', 'Campus User Profile');
-    }
-  },
+  // Backward-compatible aliases
+  getUmsUser: function() { return this.getUserProfile(); },
+  setUmsUser: function(userObj) { return this.setUserProfile(userObj); },
+  clearUmsUser: function() { return this.clearUserProfile(); },
+  updateUmsNavbarPill: function() {},
 
   /**
    * Client-side hash routing dispatcher.
@@ -573,11 +553,11 @@ const App = {
       <div class="card" style="margin-bottom: var(--space-6);">
         <h2>How to Use This Portal (5-Step Guide)</h2>
         <ol style="margin-left: var(--space-6); margin-top: var(--space-3); line-height: 1.8;">
-          <li><strong>Check Live Availability:</strong> Navigate to the <em>Availability</em> tab to view the 9-slot timetable grid across campus blocks.</li>
-          <li><strong>Find Free Rooms:</strong> Use the <em>Find a Room</em> tool to specify your required date, slot span, and attendee count.</li>
-          <li><strong>Submit a Request:</strong> Select any green "Free" slot or fill out the <em>Request a Room</em> form with instant conflict checking.</li>
-          <li><strong>Track Your Bookings:</strong> View approval statuses, history logs, or cancel requests under <em>My Requests</em>.</li>
-          <li><strong>Admin Management:</strong> Switch role to <em>Admin</em> (PIN: <code>1234</code>) to approve/reject bookings or manage rooms.</li>
+          <li><strong>Explore &amp; Book (<a href="#/availability">#/availability</a>):</strong> Browse the 9-slot interactive timeline grid or filter by building, capacity, and equipment.</li>
+          <li><strong>Live Free Now Radar:</strong> Switch to <code>⚡ Free Right Now</code> mode to see open classrooms sorted by remaining free hours.</li>
+          <li><strong>Slide-Over Instant Booking:</strong> Click any green <code>+ Book</code> slot to open the slide-over booking drawer, or click an occupied slot to see conflict details and <strong>Smart Alternative Room Recommendations</strong>.</li>
+          <li><strong>My Requests (<a href="#/requests">#/requests</a>):</strong> Track approval status, check into active today's bookings (<code>✓ Check In</code>), export <code>.ics</code> calendar invites, or print a reservation pass.</li>
+          <li><strong>Admin Management (<a href="#/admin">#/admin</a>):</strong> Switch role to <em>Admin</em> (PIN: <code>1234</code>) to approve/reject bookings, manage room inventory, or toggle maintenance mode.</li>
         </ol>
       </div>
 

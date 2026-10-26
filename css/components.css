@@ -918,6 +918,7 @@
   color: var(--text-muted);
 }
 
+.cmd-esc-btn,
 .cmd-kbd-esc {
   font-size: 10px;
   font-family: var(--font-mono);
@@ -926,6 +927,16 @@
   padding: 2px 6px;
   border-radius: 4px;
   color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cmd-esc-btn:hover,
+.cmd-esc-btn:focus-visible {
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  outline: none;
 }
 
 .cmd-palette-results {

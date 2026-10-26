@@ -1218,7 +1218,7 @@ const Rooms = {
       </div>
     `;
 
-    UI.showModal(`Room Specifications &bull; Room ${room.roomNo}`, bodyHtml);
+    UI.showModal(`Room Specifications &bull; Room ${Utils.escapeHTML(room.roomNo)}`, bodyHtml);
 
     const kioskBtn = document.getElementById('spec-open-kiosk-btn');
     if (kioskBtn) {

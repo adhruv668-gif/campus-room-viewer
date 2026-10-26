@@ -1323,6 +1323,31 @@ runTest('Bookings.checkInBooking(): Validates date guard and registers check-in 
   assert.strictEqual(reCheckRes.alreadyCheckedIn, true);
 });
 
+runTest('Role Security: Switching to Admin role cannot bypass PIN/session verification', () => {
+  Store.init();
+  App.setRole(Config.ROLES.STUDENT);
+  assert.strictEqual(App.getCurrentRole(), Config.ROLES.STUDENT, 'Role must start as Student');
+
+  // Attempt switching to Admin with no PIN
+  const noPinResult = App.setRole(Config.ROLES.ADMIN);
+  assert.strictEqual(noPinResult, false, 'Admin switch without PIN must fail');
+  assert.strictEqual(App.getCurrentRole(), Config.ROLES.STUDENT, 'Role must remain Student after failed attempt');
+
+  // Attempt switching to Admin with incorrect PIN
+  const wrongPinResult = App.setRole(Config.ROLES.ADMIN, '9999');
+  assert.strictEqual(wrongPinResult, false, 'Admin switch with wrong PIN must fail');
+  assert.strictEqual(App.getCurrentRole(), Config.ROLES.STUDENT, 'Role must remain Student after wrong PIN');
+
+  // Attempt switching to Admin with correct PIN
+  const correctPinResult = App.setRole(Config.ROLES.ADMIN, '1234');
+  assert.strictEqual(correctPinResult, true, 'Admin switch with correct PIN must succeed');
+  assert.strictEqual(App.getCurrentRole(), Config.ROLES.ADMIN, 'Role must become Admin after valid PIN');
+
+  // Reset back to Student
+  App.setRole(Config.ROLES.STUDENT);
+  assert.strictEqual(App.getCurrentRole(), Config.ROLES.STUDENT, 'Role must safely revert to Student');
+});
+
 console.log('\n====================================================');
 console.log(`TEST SUMMARY: ${passedTests} / ${totalTests} tests passed (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('====================================================\n');

@@ -435,12 +435,7 @@ const UI = {
     }
   },
 
-  /**
-   * Backward-compatible stub for legacy calls.
-   */
-  showUmsLoginModal: function() {
-    this.showRoleSwitcher();
-  },
+
 
   /**
    * Command Palette State and Controller.
@@ -623,7 +618,7 @@ const UI = {
         <div class="cmd-palette-header">
           <span class="cmd-search-icon" aria-hidden="true">&#128269;</span>
           <input type="text" id="cmd-palette-input" class="cmd-palette-input" placeholder="Type a room (34-101), booking ref, or action..." autocomplete="off" spellcheck="false" />
-          <kbd class="cmd-kbd-esc">ESC</kbd>
+          <button type="button" id="cmd-esc-close-btn" class="cmd-esc-btn cmd-kbd-esc" title="Close (Esc)">ESC</button>
         </div>
         <div id="cmd-palette-results" class="cmd-palette-results" role="listbox"></div>
         <div class="cmd-palette-footer">
@@ -720,6 +715,14 @@ const UI = {
         executeItem(idx);
       }
     });
+
+    const escCloseBtn = backdrop.querySelector('#cmd-esc-close-btn');
+    if (escCloseBtn) {
+      escCloseBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        self.closeCommandPalette();
+      });
+    }
 
     backdrop.addEventListener('click', function(e) {
       if (e.target === backdrop) {

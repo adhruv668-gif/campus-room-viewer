@@ -1585,7 +1585,7 @@ const Bookings = {
         if (isSelected) statusClass += ' slot-pill-selected';
 
         slotPills += `
-          <button type="button" class="drawer-slot-pill ${statusClass}" data-slot="${s}" title="Slot ${s} (${sDef.start}-${sDef.end}): ${st.status}">
+          <button type="button" class="drawer-slot-pill ${statusClass}" data-slot="${s}" title="Slot ${s} (${sDef.start}-${sDef.end}): ${Utils.escapeHTML(st.status)}">
             <span class="slot-pill-num">Slot ${s}</span>
             <span class="slot-pill-time">${sDef.start || ''}</span>
             <span class="slot-pill-tag">${st.status === 'Free' ? 'Free' : st.status}</span>
@@ -1658,8 +1658,10 @@ const Bookings = {
           <div>
             <label class="form-label">Requester Persona:</label>
             <div style="display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2);">
-              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Angel Seth" data-id="12611041" data-type="Student" data-email="angel.12611041@campus.edu" data-phone="9876543210">&#127891; Angel Seth (Student)</button>
-              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Dr. Rajesh Kumar" data-id="FAC1001" data-type="Faculty" data-email="rajesh.fac1001@campus.edu" data-phone="9876543211">&#128104;&#8205;&#127979; Dr. Rajesh (Faculty)</button>
+              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Angel Seth" data-id="12611041" data-type="Student" data-email="angel.12611041@campus.edu" data-phone="9876543210">&#127891; Angel Seth (12611041)</button>
+              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Kartik" data-id="12612598" data-type="Student" data-email="kartik.12612598@campus.edu" data-phone="9876543211">&#127891; Kartik (12612598)</button>
+              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Dhruv Anand" data-id="12619773" data-type="Student" data-email="dhruv.12619773@campus.edu" data-phone="9876543212">&#127891; Dhruv (12619773)</button>
+              <button type="button" class="btn btn-xs btn-subtle drawer-persona-chip" data-name="Dr. Rajesh Sharma" data-id="FAC1024" data-type="Faculty" data-email="rajesh.fac1024@campus.edu" data-phone="9876543213">&#128104;&#8205;&#127979; Dr. Rajesh (FAC1024)</button>
             </div>
             <div class="grid-2col" style="gap: var(--space-2);">
               <input type="text" id="drawer-name-input" class="form-input" placeholder="Full Name" value="${Utils.escapeHTML(defaultRequester.name)}" />

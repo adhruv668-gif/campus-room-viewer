@@ -775,46 +775,43 @@ const Availability = {
       window.print();
     });
 
-    // Cell click and keyboard delegation for slot booking drawer / inspector
-    containerEl.addEventListener('click', function(e) {
-      const specBtn = e.target.closest('.room-spec-btn');
-      if (specBtn) {
-        e.stopPropagation();
-        const roomId = specBtn.getAttribute('data-room-id');
-        Rooms.showRoomSpecModal(roomId);
-        return;
-      }
+    // Cell click and keyboard delegation for slot booking drawer / inspector / free now actions
+    if (!containerEl._hasAvailDelegation) {
+      containerEl._hasAvailDelegation = true;
 
-      const kioskBtn = e.target.closest('.room-kiosk-btn');
-      if (kioskBtn) {
-        e.stopPropagation();
-        const roomId = kioskBtn.getAttribute('data-room-id');
-        Rooms.showDoorKiosk(roomId);
-        return;
-      }
-
-      const cell = e.target.closest('.grid-cell');
-      if (cell) {
-        const roomId = cell.getAttribute('data-room-id');
-        const slot = parseInt(cell.getAttribute('data-slot'), 10);
-        const statusInfo = self.getSlotStatus(roomId, activeFilters.date, slot);
-        if (statusInfo.status === 'Free' && !statusInfo.isPast) {
-          if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
-            Bookings.openBookingDrawer(roomId, activeFilters.date, slot, slot);
-          } else {
-            self.renderSlotDetails(roomId, activeFilters.date, slot);
-          }
-        } else {
-          self.renderSlotDetails(roomId, activeFilters.date, slot);
+      containerEl.addEventListener('click', function(e) {
+        const specBtn = e.target.closest('.room-spec-btn, .freenow-spec-btn');
+        if (specBtn) {
+          e.stopPropagation();
+          const roomId = specBtn.getAttribute('data-room-id');
+          Rooms.showRoomSpecModal(roomId);
+          return;
         }
-      }
-    });
 
-    containerEl.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === ' ') {
+        const kioskBtn = e.target.closest('.room-kiosk-btn, .freenow-kiosk-btn');
+        if (kioskBtn) {
+          e.stopPropagation();
+          const roomId = kioskBtn.getAttribute('data-room-id');
+          Rooms.showDoorKiosk(roomId);
+          return;
+        }
+
+        const freenowBook = e.target.closest('.freenow-book-btn');
+        if (freenowBook) {
+          e.stopPropagation();
+          const roomId = freenowBook.getAttribute('data-room-id');
+          const start = parseInt(freenowBook.getAttribute('data-start'), 10) || 1;
+          const end = parseInt(freenowBook.getAttribute('data-end'), 10) || start;
+          if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
+            Bookings.openBookingDrawer(roomId, activeFilters.date, start, end);
+          } else {
+            window.location.hash = `#/request?roomId=${encodeURIComponent(roomId)}&date=${encodeURIComponent(activeFilters.date)}&startSlot=${start}&endSlot=${end}`;
+          }
+          return;
+        }
+
         const cell = e.target.closest('.grid-cell');
         if (cell) {
-          e.preventDefault();
           const roomId = cell.getAttribute('data-room-id');
           const slot = parseInt(cell.getAttribute('data-slot'), 10);
           const statusInfo = self.getSlotStatus(roomId, activeFilters.date, slot);
@@ -828,8 +825,29 @@ const Availability = {
             self.renderSlotDetails(roomId, activeFilters.date, slot);
           }
         }
-      }
-    });
+      });
+
+      containerEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          const cell = e.target.closest('.grid-cell');
+          if (cell) {
+            e.preventDefault();
+            const roomId = cell.getAttribute('data-room-id');
+            const slot = parseInt(cell.getAttribute('data-slot'), 10);
+            const statusInfo = self.getSlotStatus(roomId, activeFilters.date, slot);
+            if (statusInfo.status === 'Free' && !statusInfo.isPast) {
+              if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
+                Bookings.openBookingDrawer(roomId, activeFilters.date, slot, slot);
+              } else {
+                self.renderSlotDetails(roomId, activeFilters.date, slot);
+              }
+            } else {
+              self.renderSlotDetails(roomId, activeFilters.date, slot);
+            }
+          }
+        }
+      });
+    }
   },
 
   /**
@@ -1151,40 +1169,6 @@ const Availability = {
     html += `</div>`;
     containerEl.innerHTML = html;
 
-    // Wire action buttons
-    const bookBtns = containerEl.querySelectorAll('.freenow-book-btn');
-    bookBtns.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        const roomId = btn.getAttribute('data-room-id');
-        const start = parseInt(btn.getAttribute('data-start'), 10) || 1;
-        const end = parseInt(btn.getAttribute('data-end'), 10) || start;
-        if (typeof Bookings !== 'undefined' && Bookings.openBookingDrawer) {
-          Bookings.openBookingDrawer(roomId, dateStr, start, end);
-        } else {
-          window.location.hash = `#/request?roomId=${encodeURIComponent(roomId)}&date=${encodeURIComponent(dateStr)}&startSlot=${start}&endSlot=${end}`;
-        }
-      });
-    });
-
-    const kioskBtns = containerEl.querySelectorAll('.freenow-kiosk-btn');
-    kioskBtns.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        const roomId = btn.getAttribute('data-room-id');
-        if (typeof Rooms !== 'undefined' && Rooms.showDoorKiosk) {
-          Rooms.showDoorKiosk(roomId);
-        }
-      });
-    });
-
-    const specBtns = containerEl.querySelectorAll('.freenow-spec-btn');
-    specBtns.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        const roomId = btn.getAttribute('data-room-id');
-        if (typeof Rooms !== 'undefined' && Rooms.showRoomSpecModal) {
-          Rooms.showRoomSpecModal(roomId);
-        }
-      });
-    });
   },
 
   /**
@@ -1217,7 +1201,7 @@ const Availability = {
         if (s.status === 'Booked') bg = 'var(--color-booked-bg)';
         if (s.status === 'Requested') bg = 'var(--color-requested-bg)';
         if (s.status === 'Maintenance') bg = 'var(--color-maint-bg)';
-        stripHtml += `<div style="flex: 1; height: 12px; border-radius: 2px; background: ${bg}; opacity: ${s.isPast ? '0.4' : '1'};" title="Slot ${s.slot}: ${s.status}"></div>`;
+        stripHtml += `<div style="flex: 1; height: 12px; border-radius: 2px; background: ${bg}; opacity: ${s.isPast ? '0.4' : '1'};" title="Slot ${s.slot}: ${Utils.escapeHTML(s.status)}"></div>`;
       });
       stripHtml += '</div>';
 
@@ -1357,7 +1341,7 @@ const Availability = {
 
     const onConfirmAction = (!slotInfo.isPast && !isStarted && (slotInfo.status === 'Free' || slotInfo.status === 'Requested')) ? function() {
       UI.closeModal();
-      window.location.hash = `#/request?roomId=${room.id}&date=${dateStr}&startSlot=${slotNumber}&endSlot=${slotNumber}`;
+      window.location.hash = `#/request?roomId=${encodeURIComponent(room.id)}&date=${encodeURIComponent(dateStr)}&startSlot=${slotNumber}&endSlot=${slotNumber}`;
     } : null;
 
     UI.showModal(`Room ${Utils.escapeHTML(room.roomNo)} - Slot ${slotNumber} Inspection`, bodyHtml, onConfirmAction, 'Request This Slot');
