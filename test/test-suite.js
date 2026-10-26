@@ -1348,6 +1348,71 @@ runTest('Role Security: Switching to Admin role cannot bypass PIN/session verifi
   assert.strictEqual(App.getCurrentRole(), Config.ROLES.STUDENT, 'Role must safely revert to Student');
 });
 
+runTest('Drawer Booking & Admin Approval Cascade: Drawer payload creates pending booking, displays in queue, and transitions to Booked upon approval', () => {
+  Store.resetToSample();
+  const testDate = getUpcomingFutureDate(4);
+  const roomId = 'room-32-101';
+
+  // 1. Dynamically find a free slot for testing
+  let slot = null;
+  for (let s = 1; s <= 9; s++) {
+    if (Availability.getSlotStatus(roomId, testDate, s).status === 'Free') {
+      slot = s;
+      break;
+    }
+  }
+  assert.ok(slot, 'Must find a free slot on testDate');
+
+  const initialStatus = Availability.getSlotStatus(roomId, testDate, slot);
+  assert.strictEqual(initialStatus.status, 'Free', 'Slot must start as Free');
+
+  // 2. Simulate drawer booking payload (with declaration: true)
+  const drawerPayload = {
+    roomId: roomId,
+    date: testDate,
+    startSlot: slot,
+    endSlot: slot,
+    purpose: 'Algorithmic Problem Solving Workshop',
+    attendees: 15,
+    requesterName: 'Kartik',
+    requesterId: '12612598',
+    requesterType: 'Student',
+    email: 'kartik.12612598@campus.edu',
+    phone: '9876543211',
+    declaration: true,
+    requirements: []
+  };
+
+  const createRes = Bookings.createBooking(drawerPayload);
+  assert.strictEqual(createRes.success, true, 'Booking from drawer payload must succeed');
+  assert.ok(createRes.ref, 'Must generate a booking reference');
+
+  // 3. Slot status should immediately become Requested (amber pending)
+  const pendingSlotStatus = Availability.getSlotStatus(roomId, testDate, slot);
+  assert.strictEqual(pendingSlotStatus.status, 'Requested', 'Slot must reflect pending booking as Requested');
+
+  // 4. Switch role to Admin with valid PIN
+  App.setRole(Config.ROLES.ADMIN, '1234');
+  assert.strictEqual(App.getCurrentRole(), Config.ROLES.ADMIN);
+
+  // 5. Query pending bookings list for Admin
+  const allBookings = Bookings.getAll();
+  const pendingBookings = allBookings.filter(b => Bookings.getComputedStatus(b) === 'Pending');
+  const targetBooking = pendingBookings.find(b => b.ref === createRes.ref);
+  assert.ok(targetBooking, 'Pending booking must be present in Admin pending queue');
+
+  // 6. Admin approves booking
+  const approveRes = Bookings.approveBooking(targetBooking.id);
+  assert.strictEqual(approveRes.success, true, 'Admin approval must succeed');
+
+  // 7. Verify slot status is now Booked
+  const finalSlotStatus = Availability.getSlotStatus(roomId, testDate, slot);
+  assert.strictEqual(finalSlotStatus.status, 'Booked', 'Slot must now be Booked');
+
+  // Reset role back to Student
+  App.setRole(Config.ROLES.STUDENT);
+});
+
 console.log('\n====================================================');
 console.log(`TEST SUMMARY: ${passedTests} / ${totalTests} tests passed (${Math.round((passedTests/totalTests)*100)}%)`);
 console.log('====================================================\n');

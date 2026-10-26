@@ -367,7 +367,65 @@ const Rooms = {
    * @param {HTMLElement} containerEl
    */
   renderAdminPanel: function(containerEl) {
+    const allBookings = (typeof Bookings !== 'undefined' && Bookings.getAll) ? Bookings.getAll() : [];
+    const pendingBookings = allBookings.filter(function(b) {
+      return (typeof Bookings !== 'undefined' && Bookings.getComputedStatus) ? Bookings.getComputedStatus(b) === 'Pending' : (b.status === 'Pending');
+    });
+
+    let pendingBanner = '';
+    if (pendingBookings.length > 0) {
+      pendingBanner = `
+        <div class="card" id="admin-pending-queue-banner" style="margin-bottom: var(--space-4); border-left: 4px solid var(--color-warning, #f59e0b); background: var(--color-surface);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); flex-wrap: wrap; gap: var(--space-2);">
+            <div>
+              <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                <span>&#9889; Pending Approvals Queue</span>
+                <span class="badge badge-accent">${pendingBookings.length} Action Needed</span>
+              </h3>
+              <p class="form-hint" style="margin: 4px 0 0 0;">Review student and faculty booking requests directly in 1 click.</p>
+            </div>
+            <a href="#/requests" class="btn btn-xs btn-subtle">View in Requests Tab &rarr;</a>
+          </div>
+          <div class="table-container" style="max-height: 260px; overflow-y: auto;">
+            <table class="data-table" style="font-size: var(--text-sm); width: 100%;">
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>Room</th>
+                  <th>Date &amp; Slot</th>
+                  <th>Requester</th>
+                  <th>Purpose</th>
+                  <th style="text-align: right;">Quick Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${pendingBookings.map(function(pb) {
+                  const r = Rooms.getById(pb.roomId);
+                  const roomLabel = r ? `${r.roomNo} (${r.name})` : pb.roomId;
+                  const slotStr = Utils.formatSlotRange(pb.startSlot, pb.endSlot);
+                  return `
+                    <tr>
+                      <td><code>${Utils.escapeHTML(pb.ref)}</code></td>
+                      <td><strong>${Utils.escapeHTML(roomLabel)}</strong></td>
+                      <td>${Utils.formatDate(pb.date)}<br><span class="text-subtle" style="font-size: 0.75rem;">${Utils.escapeHTML(slotStr)}</span></td>
+                      <td>${Utils.escapeHTML(pb.requesterName)}<br><span class="text-subtle" style="font-size: 0.75rem;">${Utils.escapeHTML(pb.requesterId)}</span></td>
+                      <td><div style="max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${Utils.escapeHTML(pb.purpose)}">${Utils.escapeHTML(pb.purpose)}</div></td>
+                      <td style="text-align: right; white-space: nowrap;">
+                        <button type="button" class="btn btn-xs btn-accent admin-queue-approve-btn" data-id="${Utils.escapeHTML(pb.id)}" style="margin-right: 4px;">&#10003; Approve</button>
+                        <button type="button" class="btn btn-xs btn-danger admin-queue-reject-btn" data-id="${Utils.escapeHTML(pb.id)}">&#10005; Reject</button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
     containerEl.innerHTML = `
+      ${pendingBanner}
       <div class="card" style="margin-bottom: var(--space-4);">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2);">
           <div role="tablist" class="tab-list" style="display: flex; gap: var(--space-1); border-bottom: 2px solid var(--border-subtle);">
@@ -390,6 +448,50 @@ const Rooms = {
     const tabBldgs = document.getElementById('admin-tab-bldgs');
     const tabTt = document.getElementById('admin-tab-timetable');
     const tabData = document.getElementById('admin-tab-data');
+
+    // Wire quick approve & reject in pending queue
+    const queueApproveBtns = containerEl.querySelectorAll('.admin-queue-approve-btn');
+    queueApproveBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const id = btn.getAttribute('data-id');
+        const res = Bookings.approveBooking(id);
+        if (res.success) {
+          UI.showToast(res.message, 'success');
+          if (typeof UI !== 'undefined' && UI.renderNavbar) UI.renderNavbar();
+          self.renderAdminPanel(containerEl);
+        } else {
+          UI.showToast(res.message, 'error');
+        }
+      });
+    });
+
+    const queueRejectBtns = containerEl.querySelectorAll('.admin-queue-reject-btn');
+    queueRejectBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const id = btn.getAttribute('data-id');
+        const b = Bookings.getById(id);
+        if (!b) return;
+        const modalBody = `
+          <div class="form-group">
+            <label for="reject-remark-input" class="form-label form-label-required">Rejection Remark:</label>
+            <textarea id="reject-remark-input" class="form-textarea" placeholder="Provide reason (5-200 characters)..." required>Room required for scheduled department event</textarea>
+            <p class="form-hint">This remark will be visible to the requester in their status history.</p>
+          </div>
+        `;
+        UI.showModal(`Reject Request ${Utils.escapeHTML(b.ref)}`, modalBody, function() {
+          const remark = document.getElementById('reject-remark-input').value;
+          const res = Bookings.rejectBooking(id, remark);
+          if (res.success) {
+            UI.closeModal();
+            UI.showToast(res.message, 'success');
+            if (typeof UI !== 'undefined' && UI.renderNavbar) UI.renderNavbar();
+            self.renderAdminPanel(containerEl);
+          } else {
+            UI.showToast(res.message, 'error');
+          }
+        }, 'Confirm Rejection', true);
+      });
+    });
 
     const switchTab = function(tabKey) {
       self._activeAdminTab = tabKey;

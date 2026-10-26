@@ -393,7 +393,19 @@ const UI = {
     }
 
     if (requestsNavText) {
-      requestsNavText.textContent = role === Config.ROLES.ADMIN ? 'All Requests' : 'My Requests';
+      if (role === Config.ROLES.ADMIN) {
+        const allBookings = (typeof Bookings !== 'undefined' && Bookings.getAll) ? Bookings.getAll() : [];
+        const pendingCount = allBookings.filter(function(b) {
+          return (typeof Bookings !== 'undefined' && Bookings.getComputedStatus) ? Bookings.getComputedStatus(b) === 'Pending' : (b.status === 'Pending');
+        }).length;
+        if (pendingCount > 0) {
+          requestsNavText.innerHTML = `All Requests <span class="badge badge-accent" style="font-size: 0.65rem; padding: 1px 6px; margin-left: 4px; vertical-align: middle;">${pendingCount}</span>`;
+        } else {
+          requestsNavText.textContent = 'All Requests';
+        }
+      } else {
+        requestsNavText.textContent = 'My Requests';
+      }
     }
 
     // Update active class on nav links

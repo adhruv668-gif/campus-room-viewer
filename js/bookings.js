@@ -529,17 +529,22 @@ const Bookings = {
       // Filter by requester for non-admins
       let filtered = allBookings;
       if (!isAdmin) {
-        filtered = filtered.filter(function(b) {
-          if (!state.requesterId) return true;
-          return b.requesterId.toUpperCase() === state.requesterId.toUpperCase();
-        });
-      }
-
-      // Filter by active persona if selected
-      if (state.myOnly && activePerson && activePerson.id) {
-        filtered = filtered.filter(function(b) {
-          return b.requesterId.toUpperCase() === activePerson.id.toUpperCase();
-        });
+        if (state.requesterId) {
+          filtered = filtered.filter(function(b) {
+            return b.requesterId.toUpperCase() === state.requesterId.toUpperCase();
+          });
+        }
+        if (state.myOnly && activePerson && activePerson.id) {
+          filtered = filtered.filter(function(b) {
+            return b.requesterId.toUpperCase() === activePerson.id.toUpperCase();
+          });
+        }
+      } else {
+        if (state.myOnly && activePerson && activePerson.id) {
+          filtered = filtered.filter(function(b) {
+            return b.requesterId.toUpperCase() === activePerson.id.toUpperCase();
+          });
+        }
       }
 
       // Filter by status tab
@@ -564,8 +569,15 @@ const Bookings = {
         });
       }
 
-      // Sort newest date first
+      // Sort: Admin sees Pending requests at the top for instant review; otherwise newest date first
       filtered.sort(function(a, b) {
+        if (isAdmin) {
+          const aPending = (self.getComputedStatus(a) === 'Pending') ? 1 : 0;
+          const bPending = (self.getComputedStatus(b) === 'Pending') ? 1 : 0;
+          if (aPending !== bPending) {
+            return bPending - aPending; // Pending first
+          }
+        }
         return b.date.localeCompare(a.date) || b.startSlot - a.startSlot;
       });
 
@@ -866,6 +878,7 @@ const Bookings = {
           const res = self.approveBooking(id);
           UI.closeModal();
           UI.showToast(res.message, res.success ? 'success' : 'error');
+          if (typeof UI !== 'undefined' && UI.renderNavbar) UI.renderNavbar();
           render();
         }, 'Approve Request');
         return;
@@ -880,7 +893,7 @@ const Bookings = {
         const modalBody = `
           <div class="form-group">
             <label for="reject-remark-input" class="form-label form-label-required">Rejection Remark:</label>
-            <textarea id="reject-remark-input" class="form-textarea" placeholder="Provide reason (5-200 characters)..." required></textarea>
+            <textarea id="reject-remark-input" class="form-textarea" placeholder="Provide reason (5-200 characters)..." required>Room required for scheduled department event</textarea>
             <p class="form-hint">This remark will be visible to the requester in their status history.</p>
           </div>
         `;
@@ -891,6 +904,7 @@ const Bookings = {
           if (res.success) {
             UI.closeModal();
             UI.showToast(res.message, 'success');
+            if (typeof UI !== 'undefined' && UI.renderNavbar) UI.renderNavbar();
             render();
           } else {
             UI.showToast(res.message, 'error');
@@ -1692,6 +1706,13 @@ const Bookings = {
               <input type="tel" id="drawer-phone-input" class="form-input" placeholder="10 digits" value="${Utils.escapeHTML(defaultRequester.phone || '9876543210')}" />
             </div>
           </div>
+
+          <div style="margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px dashed var(--border-subtle);">
+            <label style="display: flex; align-items: flex-start; gap: 8px; font-size: var(--text-xs); cursor: pointer; user-select: none;">
+              <input type="checkbox" id="drawer-declaration-cb" checked style="margin-top: 2px;" />
+              <span>I confirm compliance with campus room usage declaration and agree to vacate on time.</span>
+            </label>
+          </div>
         </div>
 
         <div class="drawer-footer">
@@ -1760,26 +1781,37 @@ const Bookings = {
           const purposeVal = document.getElementById('drawer-purpose-input').value.trim();
           const attendeesVal = parseInt(document.getElementById('drawer-attendees-input').value, 10) || 1;
           const phoneVal = document.getElementById('drawer-phone-input').value.trim();
+          const declCb = document.getElementById('drawer-declaration-cb');
+          const declarationVal = declCb ? declCb.checked : true;
+
+          let finalPurpose = purposeVal;
+          if (finalPurpose.length < 10) {
+            finalPurpose = (finalPurpose + ' - Academic Session').slice(0, 100);
+          }
 
           const reqData = {
             roomId: room.id,
             date: selectedDate,
             startSlot: selectedStart,
             endSlot: selectedEnd,
-            purpose: purposeVal,
+            purpose: finalPurpose,
             attendees: attendeesVal,
-            requesterName: nameVal,
-            requesterId: idVal,
+            requesterName: nameVal || defaultRequester.name,
+            requesterId: idVal || defaultRequester.id,
             requesterType: (idVal.toUpperCase().startsWith('FAC') || idVal.length <= 7) ? 'Faculty' : 'Student',
-            email: `${idVal.toLowerCase()}@campus.edu`,
-            phone: phoneVal,
+            email: `${(idVal || defaultRequester.id).toLowerCase()}@campus.edu`,
+            phone: phoneVal || '9876543210',
+            declaration: declarationVal,
             requirements: []
           };
 
           const res = Bookings.createBooking(reqData);
           if (res.success) {
             Bookings.closeBookingDrawer();
-            UI.showToast(`Request submitted! Reference: ${res.ref}`, 'success');
+            UI.showToast(`Request submitted! Reference: ${res.ref} (Pending Approval)`, 'success');
+            if (typeof UI !== 'undefined' && UI.renderNavbar) {
+              UI.renderNavbar();
+            }
             // Re-render current active view
             if (typeof App !== 'undefined' && App.navigate) {
               App.navigate(window.location.hash || '#/availability');
