@@ -47,4 +47,7 @@ node test/test-suite.js
 
 ## Engineering Team
 
-Built by **Team SOUL** — Angel Seth, Kartik, and Dhruv Anand.
+Built with dedication by **Team SOUL**:
+- **Dhruv Anand** ([@adhruv668-gif](https://github.com/adhruv668-gif)) — System Architecture & State Engine
+- **Kartik Vats** ([@kartikvats904511](https://github.com/kartikvats904511)) — UI Dynamics & Slot Algorithms
+- **Angel Seth** ([@angelseth313](https://github.com/angelseth313)) — Kiosk Formats & Quality Assurance
