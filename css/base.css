@@ -245,6 +245,15 @@ code, kbd, pre {
   outline-offset: 2px;
 }
 
+/* Remove programmatic focus outline on page headings */
+h1[tabindex="-1"]:focus,
+h1[tabindex="-1"]:focus-visible,
+.view-title:focus,
+.view-title:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* Accessible skip link */
 .skip-link {
   position: absolute;

@@ -540,7 +540,7 @@ const Availability = {
               <button type="button" class="btn btn-xs ${activeFilters.date === plus2Str ? 'btn-primary' : 'btn-subtle'} avail-quick-date" data-date="${plus2Str}">+2d</button>
               <button type="button" class="btn btn-xs ${activeFilters.date === plus3Str ? 'btn-primary' : 'btn-subtle'} avail-quick-date" data-date="${plus3Str}">+3d</button>
             </div>
-            <button id="avail-print-btn" class="btn btn-sm btn-subtle" type="button" title="Print Timetable Grid">&#128424; Print</button>
+            <button id="avail-print-btn" class="btn btn-sm btn-secondary" type="button" title="Print Timetable Grid" style="min-height: 32px; padding: 4px 10px;"><span aria-hidden="true">&#128424;</span> Print Schedule</button>
           </div>
         </div>
 

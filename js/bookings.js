@@ -505,12 +505,16 @@ const Bookings = {
   renderRequestsList: function(containerEl, initialFilters) {
     const isAdmin = (typeof App !== 'undefined' && App.getCurrentRole) ? App.getCurrentRole() === Config.ROLES.ADMIN : false;
     const settings = Store.get('SETTINGS') || {};
+    const umsUser = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
     const lastRequester = settings.lastRequester || {};
+
+    let defaultId = (umsUser && umsUser.id) || (lastRequester && lastRequester.id) || '12611041';
+    if (defaultId === '12345678') defaultId = '12611041';
 
     const state = {
       status: (initialFilters && initialFilters.status) || 'All',
       search: (initialFilters && initialFilters.search) || '',
-      requesterId: isAdmin ? '' : (lastRequester.id || ''),
+      requesterId: isAdmin ? '' : defaultId,
       myUmsOnly: false,
       page: 1,
       pageSize: Config.PAGINATION.ITEMS_PER_PAGE
@@ -519,7 +523,7 @@ const Bookings = {
     const self = this;
     const render = function() {
       const allBookings = self.getAll();
-      const umsUser = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
+      const currentUms = (typeof App !== 'undefined' && App.getUmsUser) ? App.getUmsUser() : null;
 
       // Filter by requester for non-admins
       let filtered = allBookings;
@@ -531,9 +535,9 @@ const Bookings = {
       }
 
       // Filter by active UMS persona if selected
-      if (state.myUmsOnly && umsUser) {
+      if (state.myUmsOnly && currentUms) {
         filtered = filtered.filter(function(b) {
-          return b.requesterId.toUpperCase() === umsUser.id.toUpperCase();
+          return b.requesterId.toUpperCase() === currentUms.id.toUpperCase();
         });
       }
 
@@ -626,7 +630,8 @@ const Bookings = {
           }
         }
 
-        const isOwner = (b.requesterId.toUpperCase() === (lastRequester.id || '').toUpperCase());
+        const activeOwnerId = (state.requesterId || defaultId || '').toUpperCase();
+        const isOwner = (b.requesterId.toUpperCase() === activeOwnerId);
         const canEdit = isOwner && (computed === 'Pending') && !isPast;
         const canCancel = (isOwner || isAdmin) && (computed === 'Pending' || computed === 'Approved') && !isPast;
         const canCheckIn = (computed === 'Approved') && (b.date === todayStr) && !isPast;

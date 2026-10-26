@@ -305,7 +305,6 @@ const Dashboard = {
     });
 
     let svgBlocks = '';
-    let cardsHtml = '';
 
     bldgNodes.forEach(function(b) {
       // SVG Group
@@ -325,28 +324,6 @@ const Dashboard = {
           <text x="${b.x + 100}" y="186" font-size="11" font-weight="bold" fill="var(--color-primary)" text-anchor="middle">View Block Schedule &rarr;</text>
         </g>
       `;
-
-      // Companion responsive card (for accessibility & mobile devices)
-      cardsHtml += `
-        <div class="campus-map-card campus-map-block" data-building-id="${Utils.escapeHTML(b.id)}" role="button" tabindex="0" style="border-top: 4px solid ${b.color}; cursor: pointer;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-2);">
-            <div>
-              <div style="font-weight: var(--font-bold); font-size: var(--text-base);">${Utils.escapeHTML(b.code)}</div>
-              <div style="font-size: var(--text-xs); color: var(--text-secondary);">${Utils.escapeHTML(b.name)}</div>
-            </div>
-            <span class="badge" style="background-color: ${b.bg}; color: ${b.color}; border: 1px solid ${b.color}; font-weight: bold;">${b.percent}% Load</span>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1); font-size: var(--text-xs); margin-bottom: var(--space-3);">
-            <div>Total: <strong>${b.total}</strong> Rooms</div>
-            <div>Free Now: <strong style="color: #10b981;">${b.freeNow}</strong></div>
-            <div>Occupied: <strong>${b.occupiedNow}</strong></div>
-            <div>Maint: <strong style="color: var(--color-danger);">${b.maintNow}</strong></div>
-          </div>
-          <div style="text-align: right; font-size: var(--text-xs); font-weight: var(--font-bold); color: var(--color-primary);">
-            Explore Schedule &rarr;
-          </div>
-        </div>
-      `;
     });
 
     return `
@@ -365,8 +342,8 @@ const Dashboard = {
           </div>
         </header>
 
-        <!-- SVG Visual Layout for Large Displays -->
-        <div class="campus-map-svg-wrapper" style="overflow-x: auto; margin-bottom: var(--space-3); padding-bottom: var(--space-2);">
+        <!-- SVG Visual Architectural Layout -->
+        <div class="campus-map-svg-wrapper" style="overflow-x: auto; margin-bottom: var(--space-1); padding-bottom: var(--space-2);">
           <svg viewBox="0 0 880 230" class="campus-map-svg" style="width: 100%; min-width: 820px; height: auto;" aria-label="Campus Building Interactive Map">
             <!-- Interconnecting Campus Promenade -->
             <path d="M 120 115 L 770 115" stroke="var(--border-subtle)" stroke-width="6" stroke-dasharray="8 6" opacity="0.6" />
@@ -375,11 +352,6 @@ const Dashboard = {
             <path d="M 660 115 L 680 115" stroke="var(--color-primary)" stroke-width="3" />
             ${svgBlocks}
           </svg>
-        </div>
-
-        <!-- Responsive Card Grid -->
-        <div class="campus-map-cards-grid grid-4col" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3);">
-          ${cardsHtml}
         </div>
       </div>
     `;

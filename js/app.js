@@ -350,7 +350,36 @@ const App = {
         }
       }
     } catch (e) {}
+
+    const s = Store.get('SETTINGS') || {};
+    if (userObj) {
+      s.lastRequester = {
+        type: userObj.role || 'Student',
+        name: userObj.name,
+        id: userObj.id,
+        email: userObj.email || `${userObj.id}@lpu.in`,
+        phone: userObj.phone || '9876543210'
+      };
+    } else {
+      s.lastRequester = {
+        type: 'Student',
+        name: 'Angel Seth',
+        id: '12611041',
+        email: 'angel.12611041@lpu.in',
+        phone: '9876543210'
+      };
+    }
+    Store.set('SETTINGS', s);
+
     this.updateUmsNavbarPill();
+
+    // Re-render requests view if currently active to dynamically update ID filter and subtitle
+    if (this._activeRoute === 'requests') {
+      const contentEl = document.getElementById('requests-content');
+      if (contentEl && typeof Bookings !== 'undefined' && Bookings.renderRequestsList) {
+        Bookings.renderRequestsList(contentEl);
+      }
+    }
     return userObj;
   },
 
@@ -441,7 +470,8 @@ const App = {
     const heading = targetSection.querySelector('h1');
     if (heading) {
       heading.setAttribute('tabindex', '-1');
-      heading.focus();
+      heading.style.outline = 'none';
+      try { heading.focus({ preventScroll: true }); } catch (e) { heading.focus(); }
     }
 
     // Synchronize navigation bar links

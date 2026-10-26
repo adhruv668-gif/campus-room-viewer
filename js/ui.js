@@ -462,7 +462,7 @@ const UI = {
         role: 'Faculty',
         dept: 'School of CSE & Artificial Intelligence',
         email: 'rajesh.fac1024@lpu.co.in',
-        phone: '9812345678',
+        phone: '9876543213',
         badge: 'Faculty'
       },
       {
